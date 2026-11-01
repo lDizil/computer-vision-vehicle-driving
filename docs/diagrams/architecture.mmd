@@ -1,0 +1,28 @@
+flowchart TD
+    S["CameraSnapshot + ego state<br/>timestamps / calibration / pose"]
+    subgraph FAST["Fast path — baseline"]
+        F["FSDrive adapter<br/>Qwen2-VL / MoVQGAN"]
+        P["Trajectory conversion"]
+        C["CandidateSet<br/>plan_id / candidate_id / time grid<br/>MVP: one candidate"]
+        F --> P --> C
+    end
+    subgraph SLOW["Slow path — research prototype"]
+        E["Independent vision encoder<br/>MVP baseline"]
+        B["Prior Tokenizer / ContextAdapter<br/>alignment required for feature reuse"]
+        V["Slow VLM worker<br/>bounded queue / structured output"]
+        R["Validated SlowResult<br/>UNKNOWN / NO_VETO / VETO<br/>plan_id / deadline / candidate hash"]
+        E --> B --> V --> R
+    end
+    S --> F
+    S --> E
+    C --> |"Full trajectories + IDs + reference pose / time grid"| B
+    F -. "Proposed shared-feature bridge: not plug-and-play" .-> B
+    C --> A["Safety arbiter + kinematic checks<br/>identity / freshness / feasibility<br/>explicit offline fallback / failure policy"]
+    R --> A
+    A --> T["NAVSIM Trajectory [N,3]<br/>Later: CARLA controller adapter"]
+    classDef fast fill:#EAF1FE,stroke:#2563EB,color:#13233B
+    classDef slow fill:#F2EDFD,stroke:#7C3AED,color:#13233B
+    classDef safety fill:#E6F5F3,stroke:#087F8C,color:#13233B
+    class F,P,C fast
+    class E,B,V,R slow
+    class A,T safety

@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1370" viewBox="0 0 1700 1370" role="img" aria-labelledby="title desc">
+<title id="title">Hybrid Drive — proposed architecture</title>
+<desc id="desc">FSDrive baseline, independent slow vision for MVP, proposed feature bridge, validated VLM veto, deterministic checks, and NAVSIM trajectory adapter. This is a research proposal, not a safety guarantee.</desc>
+<rect width="1700" height="1370" fill="#F4F7FC"/>
+<rect x="0" y="0" width="1700" height="150" rx="0" fill="#13233B" stroke="#13233B" stroke-width="2"/>
+<text x="60" y="66.48" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="white">HYBRID DRIVE</text>
+<text x="62" y="111.0" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#C7D6ED">FSDrive × Reason2Drive  /  Архитектурное предложение v0.1</text>
+<rect x="1432" y="40" width="208" height="52" rx="26" fill="#243952" stroke="#243952" stroke-width="2"/>
+<text x="1454" y="70.32" font-family="Arial, sans-serif" font-size="21" font-weight="700" fill="#DFEAFE">RESEARCH MVP</text>
+<rect x="60" y="190" width="745" height="665" rx="24" fill="#EAF1FE" stroke="#CDDDFB" stroke-width="2"/>
+<rect x="865" y="190" width="775" height="665" rx="24" fill="#F2EDFD" stroke="#DFD2FA" stroke-width="2"/>
+<text x="92" y="230.0" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#2563EB">01  FAST PATH</text>
+<text x="899" y="230.0" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#7C3AED">02  SLOW PATH</text>
+<rect x="95" y="270" width="320" height="135" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="112" y="289" width="5" height="97" rx="2" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="131" y="313.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Снимок сцены</text>
+<text x="131" y="350.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Multi-view + ego state</text>
+<text x="131" y="380.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Время, поза, калибровка</text>
+<rect x="95" y="460" width="320" height="155" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="112" y="479" width="5" height="117" rx="2" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="131" y="503.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">FSDrive adapter</text>
+<text x="131" y="540.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Штатный baseline</text>
+<text x="131" y="570.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">MoVQGAN / Qwen2-VL</text>
+<text x="131" y="600.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Не готовый BEV API</text>
+<rect x="95" y="680" width="320" height="130" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="112" y="699" width="5" height="92" rx="2" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="131" y="723.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Планирование</text>
+<text x="131" y="760.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Траектория модели</text>
+<text x="131" y="790.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">В явной системе координат</text>
+<rect x="470" y="680" width="300" height="130" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="487" y="699" width="5" height="92" rx="2" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="506" y="723.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">CandidateSet</text>
+<text x="506" y="759.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">plan_id + candidate_id</text>
+<text x="506" y="789.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">MVP: один кандидат</text>
+<rect x="900" y="270" width="325" height="135" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="917" y="289" width="5" height="97" rx="2" fill="#7C3AED" stroke="#7C3AED" stroke-width="2"/>
+<text x="936" y="313.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Slow vision · MVP</text>
+<text x="936" y="349.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Отдельный encoder</text>
+<text x="936" y="379.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">До проверки совместимости</text>
+<rect x="900" y="495" width="325" height="150" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="917" y="514" width="5" height="112" rx="2" fill="#7C3AED" stroke="#7C3AED" stroke-width="2"/>
+<text x="936" y="538.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Prior Tokenizer</text>
+<text x="936" y="574.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Bridge — целевой вариант</text>
+<text x="936" y="604.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Alignment и multi-view</text>
+<text x="936" y="634.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">требуют эксперимента</text>
+<rect x="1280" y="495" width="325" height="150" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="1297" y="514" width="5" height="112" rx="2" fill="#7C3AED" stroke="#7C3AED" stroke-width="2"/>
+<text x="1316" y="538.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Slow VLM worker</text>
+<text x="1316" y="574.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Ограниченная очередь</text>
+<text x="1316" y="604.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Структурированный veto</text>
+<text x="1316" y="634.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Текст — только для аудита</text>
+<rect x="1280" y="715" width="325" height="100" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="1297" y="734" width="5" height="62" rx="2" fill="#7C3AED" stroke="#7C3AED" stroke-width="2"/>
+<text x="1316" y="758.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">SlowResult</text>
+<text x="1316" y="793.48" font-family="Arial, sans-serif" font-size="19" font-weight="400" fill="#56667E">plan_id · deadline · статус</text>
+<polyline points="415,337 900,337" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="900,337 887.0,331.0 887.0,343.0" fill="#2563EB"/>
+<text x="492" y="319.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#56667E">Кадры / контекст</text>
+<polyline points="255,405 255,460" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="255,460 261.0,447.0 249.0,447.0" fill="#2563EB"/>
+<polyline points="255,615 255,680" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="255,680 261.0,667.0 249.0,667.0" fill="#2563EB"/>
+<polyline points="415,745 470,745" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="470,745 457.0,739.0 457.0,751.0" fill="#2563EB"/>
+<polyline points="1062,405 1062,495" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1062,495 1068.0,482.0 1056.0,482.0" fill="#7C3AED"/>
+<polyline points="1225,570 1280,570" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1280,570 1267.0,564.0 1267.0,576.0" fill="#7C3AED"/>
+<polyline points="1442,645 1442,715" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1442,715 1448.0,702.0 1436.0,702.0" fill="#7C3AED"/>
+<polyline points="415,555 900,555" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round" stroke-dasharray="9 7"/>
+<polygon points="900,555 887.0,549.0 887.0,561.0" fill="#7C3AED"/>
+<polyline points="770,745 835,745 835,625 900,625" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="900,625 887.0,619.0 887.0,631.0" fill="#7C3AED"/>
+<text x="675" y="653.56" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#7C3AED">План + ID</text>
+<text x="480" y="535.32" font-family="Arial, sans-serif" font-size="21" font-weight="700" fill="#7C3AED">Shared features: R&amp;D</text>
+<text x="480" y="577.48" font-family="Arial, sans-serif" font-size="19" font-weight="400" fill="#56667E">Не готовый plug-and-play</text>
+<text x="474" y="420.64" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#2563EB">ЦЕЛЕВЫЕ БЮДЖЕТЫ</text>
+<text x="474" y="456.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Fast loop: 10 Гц</text>
+<text x="474" y="488.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Bridge: &lt; 5 мс</text>
+<text x="95" y="842.64" font-family="Arial, sans-serif" font-size="17" font-weight="400" fill="#56667E">Частоты и latency ещё не измерены</text>
+<text x="900" y="842.64" font-family="Arial, sans-serif" font-size="17" font-weight="400" fill="#56667E">Upstream Reason2Drive: код / веса не найдены</text>
+<rect x="600" y="965" width="500" height="165" rx="18" fill="#E6F5F3" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="617" y="984" width="5" height="127" rx="2" fill="#087F8C" stroke="#087F8C" stroke-width="2"/>
+<text x="636" y="1008.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Safety arbiter / checks</text>
+<text x="636" y="1043.48" font-family="Arial, sans-serif" font-size="19" font-weight="400" fill="#56667E">Идентичность плана + свежесть ответа</text>
+<text x="636" y="1073.48" font-family="Arial, sans-serif" font-size="19" font-weight="400" fill="#56667E">Кинематические проверки и выбор</text>
+<text x="636" y="1103.48" font-family="Arial, sans-serif" font-size="19" font-weight="400" fill="#56667E">Нет допустимого кандидата → failure policy</text>
+<polyline points="620,810 620,905 750,905 750,965" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="750,965 756.0,952.0 744.0,952.0" fill="#2563EB"/>
+<text x="400" y="896.4" font-family="Arial, sans-serif" font-size="20" font-weight="400" fill="#2563EB">Актуальный набор</text>
+<polyline points="1605,765 1660,765 1660,1047 1100,1047" fill="none" stroke="#7C3AED" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1100,1047 1113.0,1053.0 1113.0,1041.0" fill="#7C3AED"/>
+<text x="1194" y="926.56" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#7C3AED">UNKNOWN / NO_VETO / VETO</text>
+<text x="1194" y="954.56" font-family="Arial, sans-serif" font-size="18" font-weight="400" fill="#56667E">Просроченный ответ не применяется</text>
+<rect x="95" y="965" width="400" height="165" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="112" y="984" width="5" height="127" rx="2" fill="#087F8C" stroke="#087F8C" stroke-width="2"/>
+<text x="131" y="1008.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Проверяем отдельно</text>
+<text x="131" y="1045.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Timeout / out-of-order / all-veto</text>
+<text x="131" y="1075.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Влияние slow на fast p95/p99</text>
+<text x="131" y="1105.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Фактическую пользу veto</text>
+<rect x="600" y="1180" width="500" height="115" rx="18" fill="white" stroke="#DAE2EF" stroke-width="2"/>
+<rect x="617" y="1199" width="5" height="77" rx="2" fill="#087F8C" stroke="#087F8C" stroke-width="2"/>
+<text x="636" y="1223.08" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#13233B">Выходной адаптер</text>
+<text x="636" y="1260.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">NAVSIM: Trajectory [N, 3]</text>
+<text x="636" y="1290.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Позже: CARLA controller</text>
+<polyline points="850,1130 850,1180" fill="none" stroke="#087F8C" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="850,1180 856.0,1167.0 844.0,1167.0" fill="#087F8C"/>
+<text x="62" y="1339.32" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#56667E">Сплошные линии — MVP   ·   Пунктир — исследовательский bridge   ·   Не гарантия безопасности</text>
+</svg>
