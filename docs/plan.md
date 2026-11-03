@@ -1,17 +1,18 @@
 # План старта
 
-Мы сначала снимаем риски воспроизводимости и проверяем пользу slow-контура, затем инвестируем в обучение и общий encoder. Это предложение последовательности; код агента пока не реализуем.
+Мы сначала проверяем baseline и границы данных, затем соединяем Fast, Slow и Safety и проверяем пользу slow-контура. Обучение и общий encoder добавляем после этого. Файловые границы и переиспользуемые библиотеки описаны в [структуре проекта](project-structure.md); фактические результаты и состояния ведём в YouTrack.
 
-## Первые задачи
+## Порядок ближайшей реализации
 
-| Задача | Ответственный / статус | Ближайший результат |
+| Задача | Этап | Результат |
 |---|---|---|
-| [MV-105 — Linux/GPU environment](https://goddev.youtrack.cloud/issue/MV-105) | `dizi`, In Progress | Выбран Linux/NVIDIA runner, собрана матрица совместимости CUDA/PyTorch/upstream. Затем — минимальный import/GPU smoke-test. |
-| [MV-116 — анализ FSDrive](https://goddev.youtrack.cloud/issue/MV-116) | `dizi`, In Progress | Установлены источники весов, реальные multi-view/features/trajectory интерфейсы, их форматы и лицензии; сформулировано go/no-go. |
-| [MV-124 — ConstantVelocityAgent sanity-check](https://goddev.youtrack.cloud/issue/MV-124) | `dizi`, Open | После окружения выполняем штатный evaluator на mini и сохраняем реальные результаты. |
-| [MV-102](https://goddev.youtrack.cloud/issue/MV-102), [MV-103](https://goddev.youtrack.cloud/issue/MV-103) — данные | `lika`, In Progress | Проверяем фактическую доступность и schema аннотаций, соответствие кадров; существующее распределение сохраняем. |
+| [MV-135](https://goddev.youtrack.cloud/issue/MV-135), [MV-104](https://goddev.youtrack.cloud/issue/MV-104), [MV-124](https://goddev.youtrack.cloud/issue/MV-124) | Воспроизводимый CPU baseline | Контейнер, smoke и один реальный NAVSIM-сценарий с артефактами. |
+| [MV-131](https://goddev.youtrack.cloud/issue/MV-131) | Контракты и структура | Траектории, неизменяемые кандидаты, сообщения Slow, затем камера/контекст. |
+| [MV-132](https://goddev.youtrack.cloud/issue/MV-132) | Детерминированная часть Safety | Кинематические проверки, тормозной fallback и failure semantics. |
+| [MV-116](https://goddev.youtrack.cloud/issue/MV-116), [MV-130](https://goddev.youtrack.cloud/issue/MV-130) | Выбор реальных model backends | Проверенные источники driving-весов и slow-модели, ресурсы и формат inference. |
+| [MV-117](https://goddev.youtrack.cloud/issue/MV-117), [MV-120](https://goddev.youtrack.cloud/issue/MV-120), [MV-121](https://goddev.youtrack.cloud/issue/MV-121), [MV-122](https://goddev.youtrack.cloud/issue/MV-122) | Соединённый агент | Model adapters, арбитр, NAVSIM API и одинаковые ablations. |
 
-Состояния указаны на 01.11.2026; актуальные статусы — в YouTrack. `MV-104` уже Done по состоянию очереди: mini/maps подготовлены, но запуск evaluator ещё требуется проверить отдельно.
+Не создаём тикеты на отдельные файлы и микрофиксы. Следующий функциональный этап берём после merge текущего PR. CPU sample не заменяет весь mini, а GPU-часть MV-105 не считаем выполненной CPU-тестами.
 
 ---
 
@@ -66,7 +67,7 @@
 | Проверки собственного кода | pytest для преобразования координат, асинхронных контрактов, failure/degradation и выбора траектории. |
 | Учёт результатов | YAML-конфиги, JSON/CSV-метрики, checkpoint IDs/checksums. Веса и датасеты держим вне Git. |
 
-Источник версий FSDrive: [официальная установка](https://github.com/MIV-XJTU/FSDrive#%EF%B8%8F-installation). Предлагаемый стек пока не собран и не протестирован.
+Источник версий FSDrive: [официальная установка](https://github.com/MIV-XJTU/FSDrive#%EF%B8%8F-installation). CPU benchmark-окружение и команды отделены в [environment.md](environment.md); модельный GPU-стек проверяем отдельно.
 
 ## Что нужно уточнить до GPU-запусков
 

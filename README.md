@@ -25,6 +25,7 @@ Python · PyTorch · FSDrive · Reason2Drive · NAVSIM · CARLA · Bench2Drive
 ## Ссылки
 
 - [Архитектура проекта](docs/architecture.md)
+- [Структура кода и поток данных](docs/project-structure.md)
 - [Исходник архитектурной схемы](docs/diagrams/architecture.svg)
 - [Задачи проекта в YouTrack](https://goddev.youtrack.cloud/issues/MV)
 
