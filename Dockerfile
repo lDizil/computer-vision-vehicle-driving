@@ -47,9 +47,14 @@ ENV OMP_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     NUMEXPR_NUM_THREADS=1
 
+WORKDIR /workspace
+COPY pyproject.toml /workspace/
+COPY src/ /workspace/src/
+RUN python -m pip install --no-cache-dir --no-build-isolation --no-deps -e . \
+    && python -m pip check
+
 RUN useradd --create-home --uid 1000 researcher
 USER researcher
-WORKDIR /workspace
 COPY --chown=researcher:researcher scripts/ /workspace/scripts/
 COPY --chown=researcher:researcher tests/ /workspace/tests/
 

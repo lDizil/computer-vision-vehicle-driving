@@ -2,6 +2,9 @@
 !Dockerfile
 !requirements/
 !requirements/**
+!pyproject.toml
+!src/
+!src/**
 !tests/
 !tests/**
 !scripts/
