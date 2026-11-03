@@ -1,0 +1,68 @@
+{
+  "navsim_revision": "3e8291bfa89ff247231e0227778840cd0a036896",
+  "nuplan_revision": "ce3c323af01c0d7ec5672f7832ef53f9c679aab0",
+  "license": {
+    "name": "CC-BY-NC-SA-4.0 with Motional dataset terms",
+    "url": "https://motional-nuplan.s3-ap-northeast-1.amazonaws.com/LICENSE"
+  },
+  "log": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "archive_size_bytes": 534344190,
+    "archive_sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be",
+    "prefix_size_bytes": 2097152,
+    "prefix_sha256": "ebd39e42489626866205ab81fad029c67c99ec359f128a89de9b66c38e5b9cfe",
+    "member": "openscene-v1.1/meta_datas/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+    "path": "navsim_logs/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+    "size_bytes": 4832776,
+    "sha256": "d2a9b373da30670aaf327c2ab4ccc332e2b441be6cd5e3f72d77debd3adbcff3"
+  },
+  "maps": {
+    "url": "https://motional-nuplan.s3-ap-northeast-1.amazonaws.com/public/nuplan-v1.1/nuplan-maps-v1.1.zip",
+    "archive_size_bytes": 970997691,
+    "etag": "0efaac6b7c603ae6f341021b35059bcc-116",
+    "files": [
+      {
+        "member": "nuplan-maps-v1.0/us-ma-boston/9.12.1817/map.gpkg",
+        "path": "maps/us-ma-boston/9.12.1817/map.gpkg",
+        "offset": 367,
+        "compressed_size_bytes": 152892979,
+        "size_bytes": 254087168,
+        "crc32": "b1ac1ed2"
+      },
+      {
+        "member": "nuplan-maps-v1.0/sg-one-north/9.17.1964/map.gpkg",
+        "path": "maps/sg-one-north/9.17.1964/map.gpkg",
+        "offset": 152893638,
+        "compressed_size_bytes": 231020266,
+        "size_bytes": 317575168,
+        "crc32": "2dbfb55b"
+      },
+      {
+        "member": "nuplan-maps-v1.0/us-nv-las-vegas-strip/9.15.1915/map.gpkg",
+        "path": "maps/us-nv-las-vegas-strip/9.15.1915/map.gpkg",
+        "offset": 520330512,
+        "compressed_size_bytes": 318812662,
+        "size_bytes": 523767808,
+        "crc32": "25d02f06"
+      },
+      {
+        "member": "nuplan-maps-v1.0/us-pa-pittsburgh-hazelwood/9.17.1937/map.gpkg",
+        "path": "maps/us-pa-pittsburgh-hazelwood/9.17.1937/map.gpkg",
+        "offset": 839143508,
+        "compressed_size_bytes": 131842537,
+        "size_bytes": 186761216,
+        "crc32": "71294afe"
+      },
+      {
+        "member": "nuplan-maps-v1.0/nuplan-maps-v1.0.json",
+        "path": "maps/nuplan-maps-v1.0.json",
+        "offset": 970986141,
+        "compressed_size_bytes": 1141,
+        "size_bytes": 50662,
+        "crc32": "70bb0f8c",
+        "sha256": "b9c0a62335dded8b25e634bc63e3f271908b6f4f803398f0250ef7769facc504"
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+name: CPU NAVSIM checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpu-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build pinned CPU environment
+        run: docker build --tag hybrid-drive:cpu .
+      - name: Exercise real upstream without network or datasets
+        run: docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none hybrid-drive:cpu
+      - name: Prepare the pinned real-data sample
+        run: python3 scripts/prepare_navsim_sample.py --root "$RUNNER_TEMP/navsim-data" --rate-limit-mib 4
+      - name: Evaluate one real ConstantVelocityAgent scene
+        run: |
+          mkdir -p "$RUNNER_TEMP/navsim-results"
+          docker run --rm --cpus 1 --memory 4g --memory-swap 4g --network none \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/navsim-data:/data" \
+            --volume "$RUNNER_TEMP/navsim-results:/results" \
+            hybrid-drive:cpu python -m scripts.run_navsim_sample --data-root /data --output-root /results
+      - name: Save results and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: navsim-sample-results
+          retention-days: 3
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/navsim-results/**/*.log
+            ${{ runner.temp }}/navsim-results/**/result.json
+            ${{ runner.temp }}/navsim-results/**/*.csv
+            ${{ runner.temp }}/navsim-results/**/trajectory.png
+            ${{ runner.temp }}/navsim-data/sample-manifest.json
