@@ -8,6 +8,8 @@ from hybrid_drive.contracts._validation import finite_real
 from hybrid_drive.contracts.motion import EgoMotion
 from hybrid_drive.contracts.trajectory import Trajectory
 
+from ._limits import exceeds_limit, same_interval
+
 
 @dataclass(frozen=True)
 class KinematicLimits:
@@ -57,7 +59,7 @@ def check_kinematics(trajectory: Trajectory, motion: EgoMotion, limits: Kinemati
     if not isinstance(limits, KinematicLimits):
         raise ValueError("limits must be KinematicLimits")
     violations = []
-    if not math.isclose(trajectory.interval_s, limits.interval_s, rel_tol=1e-12, abs_tol=0):
+    if not same_interval(trajectory.interval_s, limits.interval_s):
         violations.append(KinematicViolation.TIME_GRID)
     if trajectory.num_poses < 3:
         violations.append(KinematicViolation.INSUFFICIENT_POSES)
@@ -72,7 +74,7 @@ def check_kinematics(trajectory: Trajectory, motion: EgoMotion, limits: Kinemati
         return KinematicReport((KinematicViolation.NUMERIC_RANGE,), None, None, None)
     thresholds = (limits.max_speed_mps, limits.max_acceleration_mps2, limits.max_jerk_mps3)
     reasons = (KinematicViolation.SPEED, KinematicViolation.ACCELERATION, KinematicViolation.JERK)
-    violations = tuple(reason for peak, bound, reason in zip(peaks, thresholds, reasons) if _exceeds(peak, bound))
+    violations = tuple(reason for peak, bound, reason in zip(peaks, thresholds, reasons) if exceeds_limit(peak, bound))
     return KinematicReport(violations, *peaks)
 
 
@@ -96,7 +98,3 @@ def _measure_peaks(trajectory: Trajectory, motion: EgoMotion) -> tuple[float, fl
 
 def _max_norm(values) -> float:
     return float(np.max(np.hypot(values[:, 0], values[:, 1])))
-
-
-def _exceeds(value: float, bound: float) -> bool:
-    return value > bound and not math.isclose(value, bound, rel_tol=1e-9, abs_tol=1e-9)
