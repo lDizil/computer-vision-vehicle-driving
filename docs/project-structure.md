@@ -32,7 +32,8 @@ src/hybrid_drive/
 └── safety/
     ├── kinematics.py           # дискретные проверки скорости/ускорения/jerk
     ├── fallback.py             # аналитический тормозной профиль и failure
-    └── selection.py            # выбор кандидата либо fallback, без slow freshness
+    ├── selection.py            # выбор кандидата либо fallback
+    └── arbiter.py              # применимость slow-ответа и объединение решения
 
 scripts/
 ├── prepare_navsim_sample.py    # проверяемые реальные logs/maps
@@ -60,13 +61,12 @@ Dockerfile                     # одна Linux-среда для arm64/amd64
 | `fast/fsdrive.py` | Загрузка проверенного checkpoint, upstream inference → CandidateSet | MV-116, MV-117, MV-118 |
 | `bridge/context.py` | Контекст выбранной slow-модели; shared-feature bridge только после alignment | MV-120 |
 | `slow/worker.py` | Модель, structured output, ограниченная очередь и ошибки inference | MV-130, MV-120 |
-| `safety/arbiter.py` | Принадлежность/свежесть ответа, veto и выбор кандидата | MV-121 |
 | `agent.py`, `adapters/navsim_agent.py` | Сборка зависимостей и реализация NAVSIM Agent API без доменной логики в адаптере | MV-122 |
 | `runtime/replay.py` | Сценарии timeout, stale/out-of-order и all-veto | После offline integration |
 
 Направление зависимостей: модели и адаптеры → `contracts`; Safety → `contracts`; сборка агента → модели/адаптеры/Safety. Контракты не импортируют PyTorch, NAVSIM, конкретные модели или runtime. Не создаём отдельный DI-framework: зависимости передаём явно при сборке агента.
 
-Дискретные кинематические проверки реализованы в `safety/kinematics.py`; [формулы и семантика результата](kinematics.md). [Fallback и offline-выбор](fallback.md) используют этот отчёт; проверка применимости slow-ответа и подключение runtime остаются отдельной ответственностью арбитра.
+Дискретные кинематические проверки реализованы в `safety/kinematics.py`; [формулы и семантика результата](kinematics.md). [Fallback, offline-выбор и SafetyArbiter](fallback.md) объединяют проверки с применимым slow-ответом. Очередь/вызов моделей и подключение evaluator остаются ответственностью runtime и сборки агента.
 
 ## Один план: что куда движется
 
