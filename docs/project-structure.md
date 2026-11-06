@@ -29,6 +29,8 @@ src/hybrid_drive/
 │   └── _validation.py          # общие проверки scalar/ID/sequence
 ├── adapters/
 │   └── navsim.py               # настоящий NAVSIM ↔ наши траектории
+├── agents/
+│   └── hybrid.py               # Fast NAVSIM agent → SafetyArbiter → native output
 └── safety/
     ├── kinematics.py           # дискретные проверки скорости/ускорения/jerk
     ├── fallback.py             # аналитический тормозной профиль и failure
@@ -61,12 +63,22 @@ Dockerfile                     # одна Linux-среда для arm64/amd64
 | `fast/fsdrive.py` | Загрузка проверенного checkpoint, upstream inference → CandidateSet | MV-116, MV-117, MV-118 |
 | `bridge/context.py` | Контекст выбранной slow-модели; shared-feature bridge только после alignment | MV-120 |
 | `slow/worker.py` | Модель, structured output, ограниченная очередь и ошибки inference | MV-130, MV-120 |
-| `agent.py`, `adapters/navsim_agent.py` | Сборка зависимостей и реализация NAVSIM Agent API без доменной логики в адаптере | MV-122 |
+| `agents/hybrid.py` | Расширение сквозного агента до целевых Fast/Slow backend | MV-122 |
 | `runtime/replay.py` | Сценарии timeout, stale/out-of-order и all-veto | После offline integration |
 
 Направление зависимостей: модели и адаптеры → `contracts`; Safety → `contracts`; сборка агента → модели/адаптеры/Safety. Контракты не импортируют PyTorch, NAVSIM, конкретные модели или runtime. Не создаём отдельный DI-framework: зависимости передаём явно при сборке агента.
 
 Дискретные кинематические проверки реализованы в `safety/kinematics.py`; [формулы и семантика результата](kinematics.md). [Fallback, offline-выбор и SafetyArbiter](fallback.md) объединяют проверки с применимым slow-ответом. Очередь/вызов моделей и подключение evaluator остаются ответственностью runtime и сборки агента.
+
+## Сквозной NAVSIM-агент
+
+`HybridDriveAgent` принимает готовый Fast NAVSIM agent, `KinematicLimits` и `BrakingConfig`. Последний ego-state передаём в Safety без обнуления боковой скорости или ускорения. Fast возвращает один кандидат; его проверка, выбор и торможение принадлежат существующему `SafetyArbiter`, а не копируются в агент.
+
+Каждый вызов — независимый offline-сценарий с локальным началом координат и `t_ref_s=0`. NAVSIM `AgentInput` не содержит глобального timestamp/token: их не выдумываем и не выдаём эти вызовы за непрерывную симуляцию. Новые ID связывают снимок и план внутри вызова; фактический token добавляет evaluator. Backend с `requires_scene=True` не подключаем: это потребовало бы привилегированные данные сцены.
+
+`compute_trajectory()` возвращает настоящий NAVSIM `Trajectory`. `last_decision` хранит только последнее решение и очищается **перед** следующим вызовом, включая ошибочный. Вызываем агент последовательно. Ошибки входа/Fast/формата не заменяем выдуманной траекторией; явный `decision.failed` сохраняем отдельно от валидности массива. Обёртка предназначена для inference, не для обучения или сохранения Fast через её `state_dict`.
+
+Первый Fast — штатный `ConstantVelocityAgent`; Slow фиксируется как `UNKNOWN/not_requested`. Следующим нейросетевым backend подключаем официальный Latent TransFuser, сохраняя FSDrive как целевую интеграцию. Проверка препятствий и семантический veto без подключённого Slow этим прогоном не выполняются.
 
 ## Один план: что куда движется
 

@@ -32,6 +32,13 @@ jobs:
             --volume "$RUNNER_TEMP/navsim-data:/data" \
             --volume "$RUNNER_TEMP/navsim-results:/results" \
             hybrid-drive:cpu python -m scripts.run_navsim_sample --data-root /data --output-root /results
+      - name: Evaluate one real HybridDriveAgent scene
+        run: |
+          docker run --rm --cpus 1 --memory 4g --memory-swap 4g --network none \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/navsim-data:/data" \
+            --volume "$RUNNER_TEMP/navsim-results:/results" \
+            hybrid-drive:cpu python -m scripts.run_navsim_sample --data-root /data --output-root /results --agent hybrid
       - name: Save results and diagnostic logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -42,6 +49,7 @@ jobs:
           path: |
             ${{ runner.temp }}/navsim-results/**/*.log
             ${{ runner.temp }}/navsim-results/**/result.json
+            ${{ runner.temp }}/navsim-results/**/decision.json
             ${{ runner.temp }}/navsim-results/**/*.csv
             ${{ runner.temp }}/navsim-results/**/trajectory.png
             ${{ runner.temp }}/navsim-data/sample-manifest.json
