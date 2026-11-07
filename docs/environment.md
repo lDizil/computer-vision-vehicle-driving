@@ -58,6 +58,32 @@ Runner проверяет входы, выбирает одну допустим
 
 Pickle исходных данных десериализуется только внутри контейнера. Монтируем только каталог этого датасета и каталог результатов; рабочие репозитории и credentials контейнеру не передаём.
 
+## Нейросетевой Fast sample
+
+После подготовки logs/maps выше отдельно получаем проверенные веса и три текущих JPEG:
+
+```bash
+mkdir -p data/ltf
+docker run --rm --cpus 1 --memory 1g --memory-swap 1g \
+  --user "$(id -u):$(id -g)" --volume "$PWD/data/ltf:/assets" \
+  hybrid-drive:cpu python -m scripts.prepare_ltf_sample --root /assets --rate-limit-mib 4
+docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+  --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
+  --env LTF_CHECKPOINT_PATH=/assets/checkpoints/ltf_seed_0.ckpt --env LTF_ASSET_ROOT=/assets \
+  --volume "$PWD/data/ltf:/assets:ro" \
+  hybrid-drive:cpu python -m pytest -q -p no:cacheprovider tests/integration
+docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+  --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
+  --volume "$PWD/data/navsim:/data:ro" --volume "$PWD/data/ltf:/assets:ro" \
+  --volume "$PWD/outputs:/results" \
+  hybrid-drive:cpu python -m scripts.run_neural_sample --data-root /data --asset-root /assets \
+  --output-root /results --revision "$(git rev-parse HEAD)" --seed 0
+```
+
+Подготовка model/camera assets ограничена 4 GiB по сети; полный camera shard не сохраняем. На Colima host `/private/tmp` может быть недоступен через bind mount: для таких путей используем отдельные именованные volumes и `docker cp`, не меняя глобальные mounts VM. При обычном Linux bind mount сохраняем UID владельца подготовленных файлов; веса намеренно создаются с ограниченными правами.
+
+[Протокол, семантика сравнения и ограничения данных](experiments.md). Отдельный `.github/workflows/neural-smoke.yml` выполняет тот же weighted/native и реальный парный прогон; обязательные проверки не заменяются `skip`, если assets отсутствуют.
+
 ## Обновление зависимостей
 
 `requirements/navsim.in` соответствует полному requirements NAVSIM по закреплённому SHA, кроме nuplan: его checkout установлен отдельно. Добавлены только инструменты сборки `wheel` и `pip`. При обновлении upstream сверяем исходный список и metadata; не меняем только SHA.
