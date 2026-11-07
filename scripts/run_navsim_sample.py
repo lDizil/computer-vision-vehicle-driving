@@ -3,10 +3,8 @@
 import argparse
 import csv
 from dataclasses import asdict
-from datetime import datetime, timezone
 import json
 import math
-import os
 from pathlib import Path
 import platform
 import subprocess
@@ -18,52 +16,11 @@ import traceback
 def run_sample(data_root, output_root, token=None, agent="cv"):
     if agent not in ("cv", "hybrid"):
         raise ValueError("Unknown sample agent")
-    from scripts.prepare_navsim_sample import SOURCES_PATH, destination, validate_sources, verify_file
+    from scripts.sample_support import load_sample, prepare_sample_paths
 
-    data_root = Path(data_root).resolve()
-    sources = json.loads(SOURCES_PATH.read_text())
-    validate_sources(data_root, sources)
-    for spec in [sources["log"], *sources["maps"]["files"]]:
-        verify_file(destination(data_root, spec["path"]), spec)
-
-    run_dir = Path(output_root).resolve() / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-    run_dir.mkdir(parents=True)
-    environment = {
-        "OPENSCENE_DATA_ROOT": str(data_root),
-        "NUPLAN_MAPS_ROOT": str(data_root / "maps"),
-        "NUPLAN_MAP_VERSION": "nuplan-maps-v1.0",
-        "NUPLAN_DATA_STORE": "local",
-        "NAVSIM_EXP_ROOT": str(run_dir),
-    }
-    os.environ.update(environment)
-
-    from hydra import compose, initialize_config_module
-    from hydra.utils import instantiate
-    from navsim.common.dataloader import SceneLoader
-    from navsim.common.dataclasses import SensorConfig
-
+    sources, run_dir = prepare_sample_paths(data_root, output_root)
     log_name = Path(sources["log"]["path"]).stem
-    overrides = [
-        "train_test_split=mini", "worker=sequential", "gpu=false",
-        "train_test_split.scene_filter.max_scenes=1",
-        "train_test_split.scene_filter.log_names=" + json.dumps([log_name]),
-    ]
-    if token:
-        overrides.append("train_test_split.scene_filter.tokens=" + json.dumps([token]))
-    with initialize_config_module(config_module="navsim.planning.script.config.metric_caching", version_base=None):
-        cfg = compose(config_name="default_metric_caching", overrides=overrides)
-    loader = SceneLoader(
-        data_path=Path(cfg.navsim_log_path), sensor_blobs_path=None,
-        scene_filter=instantiate(cfg.train_test_split.scene_filter),
-        sensor_config=SensorConfig.build_no_sensors(),
-    )
-    if len(loader.tokens) != 1:
-        raise ValueError("Expected exactly one eligible scene in the verified sample")
-    selected_token = loader.tokens[0]
-    if token and selected_token != token:
-        raise ValueError("Requested scene token was not selected")
-    if not token:
-        overrides.append("train_test_split.scene_filter.tokens=" + json.dumps([selected_token]))
+    loader, selected_token, overrides = load_sample(sources, token)
 
     cache_dir = run_dir / "metric-cache"
     score_dir = run_dir / "scores"
@@ -138,7 +95,7 @@ def run_logged(name, command, token, run_dir, durations):
     durations[name + "_seconds"] = time.monotonic() - started
 
 
-def build_hybrid_agent():
+def build_hybrid_agent(fast_agent=None):
     from navsim.agents.constant_velocity_agent import ConstantVelocityAgent
     from hybrid_drive.agents.hybrid import HybridDriveAgent
     from hybrid_drive.safety.fallback import BrakingConfig
@@ -146,7 +103,7 @@ def build_hybrid_agent():
 
     policy = sample_policy()
     return HybridDriveAgent(
-        fast_agent=ConstantVelocityAgent(),
+        fast_agent=ConstantVelocityAgent() if fast_agent is None else fast_agent,
         limits=KinematicLimits(**policy["limits"]),
         braking=BrakingConfig(**policy["braking"]),
     )

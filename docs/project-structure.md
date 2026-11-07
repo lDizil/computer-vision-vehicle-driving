@@ -31,6 +31,12 @@ src/hybrid_drive/
 │   └── navsim.py               # настоящий NAVSIM ↔ наши траектории
 ├── agents/
 │   └── hybrid.py               # Fast NAVSIM agent → SafetyArbiter → native output
+├── fast/
+│   └── latent_transfuser.py    # официальный pretrained LTF, strict/offline CPU
+├── assets/                    # bounded download, atomic files, JPEG allowlist/verification
+├── experiments/
+│   ├── protocol.py            # manifests, парность, ADE/FDE, failures в знаменателе
+│   └── splits.py              # аудит official splits и recording-level validation
 └── safety/
     ├── kinematics.py           # дискретные проверки скорости/ускорения/jerk
     ├── fallback.py             # аналитический тормозной профиль и failure
@@ -39,11 +45,15 @@ src/hybrid_drive/
 
 scripts/
 ├── prepare_navsim_sample.py    # проверяемые реальные logs/maps
-└── run_navsim_sample.py        # caching → scoring → CSV/JSON/PNG
+├── prepare_ltf_sample.py       # pinned checkpoint/encoder + три настоящие камеры
+├── sample_support.py           # общий verified-data setup
+├── run_navsim_sample.py        # caching → CV/checks → CSV/JSON/PNG
+└── run_neural_sample.py        # один neural Fast → парный baseline/checks + CV reference
 
 tests/
 ├── unit/                      # наша логика и независимые fixtures
-└── smoke/                     # настоящие установленные upstream
+├── smoke/                     # настоящие установленные upstream, без весов
+└── integration/               # обязательные реальные weights, явный отдельный запуск
 
 requirements/                  # закреплённый CPU dependency graph
 Dockerfile                     # одна Linux-среда для arm64/amd64
@@ -78,7 +88,7 @@ Dockerfile                     # одна Linux-среда для arm64/amd64
 
 `compute_trajectory()` возвращает настоящий NAVSIM `Trajectory`. `last_decision` хранит только последнее решение и очищается **перед** следующим вызовом, включая ошибочный. Вызываем агент последовательно. Ошибки входа/Fast/формата не заменяем выдуманной траекторией; явный `decision.failed` сохраняем отдельно от валидности массива. Обёртка предназначена для inference, не для обучения или сохранения Fast через её `state_dict`.
 
-Первый Fast — штатный `ConstantVelocityAgent`; Slow фиксируется как `UNKNOWN/not_requested`. Следующим нейросетевым backend подключаем официальный Latent TransFuser, сохраняя FSDrive как целевую интеграцию. Проверка препятствий и семантический veto без подключённого Slow этим прогоном не выполняются.
+Fast выбираем явно: штатный `ConstantVelocityAgent` либо официальный pretrained `LatentTransfuserAgent`; Slow фиксируется как `UNKNOWN/not_requested`. FSDrive остаётся целевой интеграцией, LTF не подменяет его названием. [Нейросетевой вход, парные сравнения и протокол](experiments.md). Проверка препятствий и семантический veto без подключённого Slow этим прогоном не выполняются.
 
 ## Один план: что куда движется
 

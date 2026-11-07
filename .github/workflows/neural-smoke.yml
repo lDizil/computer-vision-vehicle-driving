@@ -1,0 +1,99 @@
+name: CPU Latent TransFuser sample
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/neural-smoke.yml'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'pyproject.toml'
+      - 'requirements/**'
+      - 'src/hybrid_drive/**'
+      - 'scripts/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neural-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  neural-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Record the exact checked-out revision
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          mkdir -p "$RUNNER_TEMP/neural-results"
+          printf '%s\n' "$SOURCE_REVISION" > "$RUNNER_TEMP/neural-results/revision.log"
+      - name: Build the pinned CPU environment
+        run: docker build --tag hybrid-drive:neural . 2>&1 | tee "$RUNNER_TEMP/neural-results/build.log"
+      - name: Run dataset-free unit and smoke tests
+        run: |
+          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+            hybrid-drive:neural 2>&1 | tee "$RUNNER_TEMP/neural-results/unit-smoke.log"
+      - name: Prepare the pinned real log and maps
+        run: |
+          python3 scripts/prepare_navsim_sample.py \
+            --root "$RUNNER_TEMP/navsim-data" --rate-limit-mib 8 \
+            2>&1 | tee "$RUNNER_TEMP/neural-results/prepare-navsim.log"
+      - name: Prepare verified official weights and three real cameras
+        run: |
+          mkdir -p "$RUNNER_TEMP/ltf-assets"
+          docker run --rm --cpus 1 --memory 1g --memory-swap 1g \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/ltf-assets:/assets" \
+            hybrid-drive:neural python -m scripts.prepare_ltf_sample \
+            --root /assets --rate-limit-mib 16 \
+            2>&1 | tee "$RUNNER_TEMP/neural-results/prepare-ltf.log"
+      - name: Require real weighted CPU inference and native LiDAR parity
+        run: |
+          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" \
+            --env LTF_CHECKPOINT_PATH=/assets/checkpoints/ltf_seed_0.ckpt \
+            --env LTF_ASSET_ROOT=/assets --env HF_HUB_OFFLINE=1 \
+            --volume "$RUNNER_TEMP/navsim-data:/data:ro" \
+            --volume "$RUNNER_TEMP/ltf-assets:/assets:ro" \
+            --volume "$RUNNER_TEMP/neural-results:/results" \
+            hybrid-drive:neural python -m pytest -q -p no:cacheprovider tests/integration \
+            2>&1 | tee "$RUNNER_TEMP/neural-results/weighted-integration.log"
+      - name: Evaluate one real paired LTF and Hybrid scene
+        run: |
+          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
+            --volume "$RUNNER_TEMP/navsim-data:/data:ro" \
+            --volume "$RUNNER_TEMP/ltf-assets:/assets:ro" \
+            --volume "$RUNNER_TEMP/neural-results:/results" \
+            hybrid-drive:neural python -m scripts.run_neural_sample \
+            --data-root /data --asset-root /assets --output-root /results \
+            --revision "$SOURCE_REVISION" --seed 0 \
+            2>&1 | tee "$RUNNER_TEMP/neural-results/neural-evaluation.log"
+      - name: Save reports and verified manifests only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: neural-sample-results
+          retention-days: 3
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/neural-results/**/*.json
+            ${{ runner.temp }}/neural-results/**/*.csv
+            ${{ runner.temp }}/neural-results/**/*.png
+            ${{ runner.temp }}/neural-results/**/*.log
+            ${{ runner.temp }}/navsim-data/sample-manifest.json
+            ${{ runner.temp }}/ltf-assets/ltf-manifest.json
+            ${{ runner.temp }}/ltf-assets/ltf-camera-manifest.json

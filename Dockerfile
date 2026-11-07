@@ -58,4 +58,4 @@ USER researcher
 COPY --chown=researcher:researcher scripts/ /workspace/scripts/
 COPY --chown=researcher:researcher tests/ /workspace/tests/
 
-CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "/workspace/tests"]
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "/workspace/tests/unit", "/workspace/tests/smoke"]
