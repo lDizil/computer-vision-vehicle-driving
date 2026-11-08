@@ -1,0 +1,30 @@
+ARG NAVSIM_IMAGE=hybrid-drive:cpu
+FROM python:3.10-slim-bookworm@sha256:5be5aaecb962a41567bc8041f1e9e3432cb085b037fe057f9a562630b2e4b370 AS llama-builder
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends build-essential cmake git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG LLAMA_REVISION=372dc5ca157276beb6c67b2e92477e8d662e964a
+RUN git init /build/llama \
+    && git -C /build/llama remote add origin https://github.com/ggml-org/llama.cpp.git \
+    && git -C /build/llama fetch --depth 1 origin "${LLAMA_REVISION}" \
+    && git -C /build/llama checkout --detach FETCH_HEAD \
+    && cmake -S /build/llama -B /build/llama/build \
+        -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DGGML_METAL=OFF \
+        -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DMTMD_VIDEO=OFF \
+    && cmake --build /build/llama/build --target llama-server -j 1
+RUN git -C /build/llama rev-parse HEAD > /build/llama/build/bin/SOURCE_REVISION
+
+FROM ${NAVSIM_IMAGE}
+USER root
+COPY --from=llama-builder /build/llama/build/bin/ /opt/llama/
+ENV LD_LIBRARY_PATH=/opt/llama \
+    LLAMA_SERVER_PATH=/opt/llama/llama-server
+COPY src/ /workspace/src/
+COPY --chown=researcher:researcher scripts/ /workspace/scripts/
+COPY --chown=researcher:researcher tests/ /workspace/tests/
+RUN /opt/llama/llama-server --version && python -m pip check
+USER researcher
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "/workspace/tests/unit", "/workspace/tests/smoke"]

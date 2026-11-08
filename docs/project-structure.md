@@ -125,3 +125,7 @@ Slow-запрос содержит этот набор целиком, а не �
 CPU Docker уже содержит настоящие NAVSIM/nuPlan, PyTorch, NumPy и устанавливаемый `hybrid_drive`. Не создаём второй образ только ради файловой структуры. [Команды и закреплённые версии](environment.md) едины для Mac/Linux и CI. Локальные тесты запускаем с 1 CPU / 2 GiB и без сети.
 
 FSDrive со своим CUDA/PyTorch-стеком позднее изолируем от benchmark-образа. Не устанавливаем несовместимые ML-зависимости в существующую рабочую CPU-среду и не скачиваем веса при обычном запуске тестов.
+
+## Image-input Slow baseline
+
+`slow/` владеет immutable camera/plan context, строгим JSON protocol, bounded subprocess worker и planning session. `adapters/slow_context.py` читает только текущий NAVSIM AgentInput. Локальный llama.cpp backend и offline/replay runners отделены от Fast и Safety; shared-feature Bridge и Reason2Drive не подменяются этим baseline. [Границы и поток данных](slow-path.md).

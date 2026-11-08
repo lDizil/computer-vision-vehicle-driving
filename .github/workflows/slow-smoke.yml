@@ -1,0 +1,91 @@
+name: CPU Slow VLM pilot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/slow-smoke.yml'
+      - 'Dockerfile.slow'
+      - 'Dockerfile'
+      - 'requirements/**'
+      - 'pyproject.toml'
+      - 'src/hybrid_drive/contracts/**'
+      - 'src/hybrid_drive/safety/**'
+      - 'src/hybrid_drive/fast/**'
+      - 'src/hybrid_drive/slow/**'
+      - 'src/hybrid_drive/adapters/slow_context.py'
+      - 'src/hybrid_drive/assets/slow.py'
+      - 'scripts/*slow*'
+      - 'scripts/smolvlm-sources.json'
+      - 'scripts/sample_support.py'
+      - 'scripts/run_navsim_sample.py'
+      - 'scripts/run_neural_sample.py'
+      - 'tests/unit/test_slow*'
+      - 'tests/smoke/test_native_slow_context.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slow-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  slow-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build isolated pinned CPU and Slow environments
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          mkdir -p "$RUNNER_TEMP/slow-results"
+          docker build -t hybrid-drive:cpu . 2>&1 | tee "$RUNNER_TEMP/slow-results/build-cpu.log"
+          docker build --cpu-period 100000 --cpu-quota 100000 --memory 2g --memory-swap 2g \
+            -f Dockerfile.slow -t hybrid-drive:slow . 2>&1 | tee "$RUNNER_TEMP/slow-results/build-slow.log"
+      - name: Require dataset-free native and real subprocess checks
+        run: |
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            hybrid-drive:slow 2>&1 | tee "$RUNNER_TEMP/slow-results/unit-smoke.log"
+      - name: Prepare pinned logs, maps and model assets
+        run: |
+          python3 scripts/prepare_navsim_sample.py --root "$RUNNER_TEMP/navsim-data" --rate-limit-mib 16
+          mkdir -p "$RUNNER_TEMP/ltf-assets" "$RUNNER_TEMP/slow-assets"
+          docker run --rm --cpus 1 --memory 1g --memory-swap 1g --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/ltf-assets:/assets" hybrid-drive:slow \
+            python -m scripts.prepare_ltf_sample --root /assets --rate-limit-mib 16
+          docker run --rm --cpus 1 --memory 512m --memory-swap 512m --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/slow-assets:/assets" hybrid-drive:slow \
+            python -m scripts.prepare_slow_sample --root /assets --rate-limit-mib 16
+      - name: Require a real offline camera and trajectory deliberation
+        run: |
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
+            -v "$RUNNER_TEMP/navsim-data:/data:ro" -v "$RUNNER_TEMP/ltf-assets:/fast:ro" \
+            -v "$RUNNER_TEMP/slow-assets:/slow:ro" -v "$RUNNER_TEMP/slow-results:/results" \
+            hybrid-drive:slow python -m scripts.run_slow_sample --data-root /data --fast-root /fast \
+            --slow-root /slow --output-root /results --revision "$SOURCE_REVISION" --deadline-seconds 60 --seed 0 \
+            2>&1 | tee "$RUNNER_TEMP/slow-results/pilot.log"
+      - name: Save reports without weights or original cameras
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: slow-pilot-results
+          retention-days: 3
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/slow-results/**/*.json
+            ${{ runner.temp }}/slow-results/**/*.csv
+            ${{ runner.temp }}/slow-results/**/*.png
+            ${{ runner.temp }}/slow-results/**/*.txt
+            ${{ runner.temp }}/slow-results/**/*.log
+            ${{ runner.temp }}/slow-assets/smolvlm-manifest.json

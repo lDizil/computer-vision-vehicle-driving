@@ -44,7 +44,7 @@ jobs:
         run: docker build --tag hybrid-drive:neural . 2>&1 | tee "$RUNNER_TEMP/neural-results/build.log"
       - name: Run dataset-free unit and smoke tests
         run: |
-          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
             hybrid-drive:neural 2>&1 | tee "$RUNNER_TEMP/neural-results/unit-smoke.log"
       - name: Prepare the pinned real log and maps
         run: |
@@ -62,7 +62,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/neural-results/prepare-ltf.log"
       - name: Require real weighted CPU inference and native LiDAR parity
         run: |
-          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
             --user "$(id -u):$(id -g)" \
             --env LTF_CHECKPOINT_PATH=/assets/checkpoints/ltf_seed_0.ckpt \
             --env LTF_ASSET_ROOT=/assets --env HF_HUB_OFFLINE=1 \
@@ -73,7 +73,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/neural-results/weighted-integration.log"
       - name: Evaluate one real paired LTF and Hybrid scene
         run: |
-          docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none \
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
             --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
             --volume "$RUNNER_TEMP/navsim-data:/data:ro" \
             --volume "$RUNNER_TEMP/ltf-assets:/assets:ro" \
