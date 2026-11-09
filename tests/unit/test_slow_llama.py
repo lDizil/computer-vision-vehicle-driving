@@ -172,14 +172,17 @@ def test_generation_sends_ordered_real_rgb_full_plan_and_strict_deterministic_sc
         response_format = payload["response_format"]
         assert response_format["type"] == "json_object"
         schema = response_format["schema"]
-        assert schema["additionalProperties"] is False
-        assert set(schema["required"]) == {"context_hash", "status", "vetoed_candidate_ids", "explanation"}
-        assert schema["properties"]["context_hash"]["const"] == context.content_hash
-        assert schema["properties"]["status"]["enum"] == ["UNKNOWN", "NO_VETO", "VETO"]
-        assert schema["properties"]["vetoed_candidate_ids"] == {
-            "type": "array", "items": {"type": "string", "enum": ["left", "straight"]}, "maxItems": 2,
-        }
-        assert schema["properties"]["explanation"]["maxLength"] == 512
+        assert set(schema) == {"oneOf"} and len(schema["oneOf"]) == 3
+        for branch, status in zip(schema["oneOf"], ("UNKNOWN", "NO_VETO", "VETO")):
+            assert branch["type"] == "object" and branch["additionalProperties"] is False
+            assert set(branch["required"]) == {"context_hash", "status", "vetoed_candidate_ids", "explanation"}
+            assert branch["properties"]["context_hash"]["const"] == context.content_hash
+            assert branch["properties"]["status"] == {"type": "string", "const": status}
+            assert branch["properties"]["vetoed_candidate_ids"] == {
+                "type": "array", "items": {"type": "string", "enum": ["left", "straight"]},
+                "minItems": 1 if status == "VETO" else 0, "maxItems": 2 if status == "VETO" else 0,
+            }
+            assert branch["properties"]["explanation"]["maxLength"] == 512
     finally:
         backend.close()
 

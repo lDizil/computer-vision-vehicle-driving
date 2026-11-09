@@ -8,6 +8,7 @@ import os
 import pickle
 import signal
 import struct
+import subprocess
 import sys
 import time
 
@@ -15,7 +16,7 @@ from hybrid_drive.contracts._validation import finite_real, identifier
 from hybrid_drive.contracts.slow import SlowResult
 
 from .context import SlowContext
-from .protocol import make_prompt, parse_response
+from .protocol import InvalidSlowOutput, make_prompt, parse_response
 
 
 _OUTPUT_LIMIT = 8192
@@ -24,6 +25,7 @@ _TASK = struct.Struct("!QI")
 _INPUT_LIMIT = 4 * 1024 * 1024
 _STOP_GRACE_S = 0.025
 _CLOSE_BUDGET_S = 0.5
+_GROUP_PROBE_TIMEOUT_S = 0.15
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,8 @@ class AsyncSlowWorker:
     retained; dropped_completion_count exposes overwritten audit events. A
     consumer needing full history must poll between submissions. Single-thread
     ownership is required. close has a fixed wall-clock cleanup budget.
+    Native Darwin cleanup can wait for bounded ps probes, including during
+    submit/poll; this offline path does not guarantee a 10 Hz fast loop.
     """
 
     def __init__(self, factory, model_version: str, *, clock=time.monotonic):
@@ -62,6 +66,7 @@ class AsyncSlowWorker:
         self._token = 0
         self._stopping = False
         self._stop_started = 0.0
+        self._signal_error = None
         self._events = deque(maxlen=2)
         self.dropped_completion_count = 0
         self.outcome_counts = Counter()
@@ -180,10 +185,12 @@ class AsyncSlowWorker:
             if token != self._token or digest.decode("ascii") != self._active.content_hash:
                 raise ValueError("Mismatched worker envelope")
             outcome, result = "backend_error", None
-            if code == b"C":
+            if code in (b"C", b"I"):
                 if length > _OUTPUT_LIMIT:
                     raise ValueError("Oversized worker output")
-                raw = bytes(memoryview(self._buffer).cast("B")[:length]).decode("utf-8")
+                if length or code == b"C":
+                    raw = bytes(memoryview(self._buffer).cast("B")[:length]).decode("utf-8")
+            if code == b"C":
                 result = parse_response(raw, self._active)
                 result.validate_for(self._active.request)
                 outcome = "completed"
@@ -226,10 +233,22 @@ class AsyncSlowWorker:
                 return
             except ProcessLookupError:
                 pass
+            except PermissionError as exc:
+                if sys.platform != "darwin":
+                    raise
+                self._signal_error = self._signal_error or exc
+                if process.is_alive():
+                    try:
+                        process.kill() if sig == signal.SIGKILL else process.terminate()
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                # Group EPERM can race leader exit on Darwin. Only _reap's
+                # dead-leader and independent ps checks can confirm cleanup.
+                return
         if process.is_alive():
             process.kill() if sig == signal.SIGKILL else process.terminate()
 
-    def _reap(self):
+    def _reap(self, *, deadline_monotonic_s=None):
         process = self._process
         if process is None or process.pid is None:
             self._dispose()
@@ -240,7 +259,10 @@ class AsyncSlowWorker:
             return
         process.join(timeout=0)
         self._signal(signal.SIGKILL)
-        if _group_has_live_members(process.pid):
+        probe_timeout_s = _GROUP_PROBE_TIMEOUT_S
+        if deadline_monotonic_s is not None:
+            probe_timeout_s = max(0.0, deadline_monotonic_s - time.monotonic())
+        if _group_has_live_members(process.pid, probe_timeout_s=probe_timeout_s):
             return
         self._dispose()
 
@@ -256,6 +278,7 @@ class AsyncSlowWorker:
         self._input = self._task_reader = self._input_buffer = None
         self._reader = self._writer = self._buffer = None
         self._stopping = False
+        self._signal_error = None
 
     def close(self) -> None:
         self.closed = True
@@ -272,12 +295,12 @@ class AsyncSlowWorker:
             self._stop_started = time.monotonic()
         until = time.monotonic() + _CLOSE_BUDGET_S
         while self._process is not None and time.monotonic() < until:
-            self._reap()
+            self._reap(deadline_monotonic_s=until)
             if self._process is not None:
-                time.sleep(0.002)
+                time.sleep(min(0.002, max(0.0, until - time.monotonic())))
         if self._process is not None:
             self._signal(signal.SIGKILL)
-            raise RuntimeError("Worker termination not confirmed within cleanup budget")
+            raise RuntimeError("Worker termination not confirmed within cleanup budget") from self._signal_error
 
     def __enter__(self):
         if self.closed:
@@ -288,9 +311,11 @@ class AsyncSlowWorker:
         self.close()
 
 
-def _group_has_live_members(pgid):
+def _group_has_live_members(pgid, *, probe_timeout_s=_GROUP_PROBE_TIMEOUT_S):
     if os.name != "posix":
         return False
+    if sys.platform == "darwin":
+        return _darwin_group_has_live_members(pgid, timeout_s=probe_timeout_s)
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:
@@ -314,6 +339,30 @@ def _group_has_live_members(pgid):
     return False
 
 
+def _darwin_group_has_live_members(pgid, *, timeout_s=_GROUP_PROBE_TIMEOUT_S):
+    if timeout_s <= 0:
+        return True
+    try:
+        snapshot = subprocess.run(
+            ["/bin/ps", "-axo", "pgid=,stat="],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            check=True, timeout=min(_GROUP_PROBE_TIMEOUT_S, timeout_s),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    rows = snapshot.stdout.splitlines()
+    if not rows:
+        return True
+    for row in rows:
+        fields = row.split()
+        if (len(fields) != 2 or not fields[0].isdigit()
+                or fields[1][0] not in "EIRSTUZ"):
+            return True
+        if int(fields[0]) == pgid and not fields[1].startswith("Z"):
+            return True
+    return False
+
+
 def _child_main(factory, model_version, inputs, input_buffer, writer, buffer):
     if os.name == "posix":
         os.setsid()
@@ -332,18 +381,15 @@ def _child_main(factory, model_version, inputs, input_buffer, writer, buffer):
                     backend = factory()
                 if getattr(backend, "model_version", model_version) != model_version:
                     raise ValueError("Backend model version mismatch")
-                raw = backend.generate(context)
-                if not isinstance(raw, str) or len(raw) > _OUTPUT_LIMIT:
-                    code = b"I"
-                else:
-                    output = raw.encode("utf-8")
-                    code = b"C" if len(output) <= _OUTPUT_LIMIT else b"I"
-            except UnicodeError:
-                code, output = b"I", b""
+                output = _bounded_output_bytes(backend.generate(context))
+                code = b"C" if output is not None else b"I"
+                output = output or b""
+            except InvalidSlowOutput as exc:
+                code, output = b"I", _bounded_output_bytes(exc.raw_response) or b""
             except Exception:
                 # Neither exception messages nor model traceback cross IPC.
                 code, output = b"B", b""
-            if code != b"C":
+            if code == b"B":
                 output = b""
             memoryview(buffer).cast("B")[:len(output)] = output
             writer.send_bytes(_NOTICE.pack(token, context.content_hash.encode("ascii"), code, len(output)))
@@ -355,3 +401,13 @@ def _child_main(factory, model_version, inputs, input_buffer, writer, buffer):
                 pass
         inputs.close()
         writer.close()
+
+
+def _bounded_output_bytes(raw):
+    if not isinstance(raw, str) or len(raw) > _OUTPUT_LIMIT:
+        return None
+    try:
+        output = raw.encode("utf-8")
+    except UnicodeError:
+        return None
+    return output if len(output) <= _OUTPUT_LIMIT else None

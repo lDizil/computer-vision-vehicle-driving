@@ -1,0 +1,26 @@
+{
+  "schema": "hybrid-drive-qwen3vl-2b-q4-k-m-v1",
+  "model_version": "qwen3vl-2b-q4-k-m-52d6c8f-llama372dc5c-v1",
+  "license": "Apache-2.0",
+  "runtime_license": "MIT",
+  "runtime_revision": "372dc5ca157276beb6c67b2e92477e8d662e964a",
+  "repository": "Qwen/Qwen3-VL-2B-Instruct-GGUF",
+  "files": [
+    {
+      "path": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "revision": "52d6c8ffea26cc873ac5ad116f8631268d7eb503",
+      "size_bytes": 1107409952,
+      "sha256": "089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae",
+      "etag": "06fb8948e506b2e751a0f81f6e365382a3b9ea5f304ade3c77a814adc9543109"
+    },
+    {
+      "path": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+      "revision": "52d6c8ffea26cc873ac5ad116f8631268d7eb503",
+      "size_bytes": 445053216,
+      "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
+      "etag": "df4d5f12ac5349b780b8a2d5033e9b529c14a82a30c5b69bbdcef52b79a56ff3"
+    }
+  ]
+}

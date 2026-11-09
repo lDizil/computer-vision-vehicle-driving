@@ -6,14 +6,18 @@ import io
 import json
 import math
 from pathlib import Path
+import re
 import socket
 import subprocess
+import sys
 import time
+from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from hybrid_drive.assets.slow import verify_slow
-from .protocol import MAX_RESPONSE_BYTES, make_prompt
+from .context import SlowContext
+from .protocol import InvalidSlowOutput, MAX_RESPONSE_BYTES, bounded_prompt, make_prompt
 
 
 MAX_HTTP_BYTES = 256 * 1024
@@ -28,6 +32,10 @@ class LlamaServerFactory:
     seed: int = 0
     startup_timeout_s: float = 30
     request_timeout_s: float = 60
+    execution_profile: str = "cpu"
+    threads: int = 1
+    prompt_builder: Callable[[SlowContext], str] = make_prompt
+    decision_first: bool = False
 
     @property
     def model_version(self):
@@ -54,6 +62,24 @@ class LlamaVisionBackend:
                 raise ValueError("HTTP/startup timeouts must be in (0, 120] seconds")
         if isinstance(config.seed, bool) or not isinstance(config.seed, int) or not 0 <= config.seed < 2**32:
             raise ValueError("Seed must be an integer in [0, 2**32)")
+        if config.execution_profile not in ("cpu", "metal"):
+            raise ValueError("Execution profile must be cpu or metal")
+        if isinstance(config.threads, bool) or not isinstance(config.threads, int) or not 1 <= config.threads <= 12:
+            raise ValueError("CPU threads must be in 1..12")
+        if not callable(config.prompt_builder):
+            raise ValueError("prompt_builder must be callable")
+        if not isinstance(config.decision_first, bool):
+            raise ValueError("decision_first must be a boolean")
+        metal_device = None
+        if config.execution_profile == "metal":
+            if sys.platform != "darwin":
+                raise ValueError("Metal profile requires a native macOS runtime")
+            devices = subprocess.run([config.server_path, "--list-devices"], capture_output=True,
+                                     text=True, timeout=10, check=True)
+            available = re.search(r"^\s*(MTL\d+):", devices.stdout + devices.stderr, re.MULTILINE)
+            if available is None:
+                raise ValueError("Metal was requested but is unavailable; no silent CPU fallback")
+            metal_device = available.group(1)
         self.config = config
         self._process = None
         self._opener = build_opener(ProxyHandler({}))
@@ -66,10 +92,13 @@ class LlamaVisionBackend:
         command = [
             config.server_path, "-m", str(root / config.sources["files"][0]["path"]),
             "--mmproj", str(root / config.sources["files"][1]["path"]),
-            "--host", "127.0.0.1", "--port", str(port), "--threads", "1", "--threads-batch", "1",
-            "--gpu-layers", "0", "--no-mmproj-offload", "--parallel", "1", "--ctx-size", "4096",
+            "--host", "127.0.0.1", "--port", str(port),
+            "--threads", str(config.threads), "--threads-batch", str(config.threads),
+            "--parallel", "1", "--ctx-size", "4096",
             "--image-max-tokens", "64", "--offline", "--no-webui", "--log-disable",
         ]
+        command += (["--gpu-layers", "0", "--no-mmproj-offload"] if config.execution_profile == "cpu"
+                    else ["--gpu-layers", "999", "--mmproj-offload", "--device", metal_device])
         # Inherit the worker's group: killing a client alone would leave inference running.
         self._process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -114,19 +143,23 @@ class LlamaVisionBackend:
             Image.fromarray(camera.rgb, mode="RGB").save(image, format="PNG")
             url = "data:image/png;base64," + base64.b64encode(image.getvalue()).decode("ascii")
             content.append({"type": "image_url", "image_url": {"url": url}})
-        content.append({"type": "text", "text": make_prompt(context)})
+        prompt = bounded_prompt(self.config.prompt_builder(context))
+        content.append({"type": "text", "text": prompt})
         payload = {
             "messages": [{"role": "user", "content": content}], "temperature": 0,
             "seed": self.config.seed, "max_tokens": self.config.max_tokens, "stream": False,
-            "response_format": {"type": "json_object", "schema": response_schema(context)},
+            "response_format": {"type": "json_object", "schema": response_schema(
+                context, decision_first=self.config.decision_first)},
         }
         reply = self._json("/v1/chat/completions", payload, timeout=self.config.request_timeout_s)
         choices = reply.get("choices")
-        if not isinstance(choices, list) or len(choices) != 1 or choices[0].get("finish_reason") != "stop":
-            raise ValueError("Local model response was truncated or not a completed choice")
+        if not isinstance(choices, list) or len(choices) != 1:
+            raise ValueError("Local server returned an invalid choice envelope")
         raw = choices[0].get("message", {}).get("content")
         if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_RESPONSE_BYTES:
-            raise ValueError("Local model returned invalid or oversized content")
+            raise ValueError("Local server returned invalid or oversized content")
+        if choices[0].get("finish_reason") != "stop":
+            raise InvalidSlowOutput("Local model response was truncated or not completed", raw)
         return raw
 
     def close(self):
@@ -146,15 +179,26 @@ class LlamaVisionBackend:
             pass  # The enclosing worker still kills the entire group on hard timeout.
 
 
-def response_schema(context):
-    return {
-        "type": "object", "properties": {
+def response_schema(context, *, decision_first=False):
+    variants = []
+    ids = [value.candidate_id for value in context.request.plan.candidates]
+    for status in ("UNKNOWN", "NO_VETO", "VETO"):
+        # Constrain the same cross-field invariant that the independent parser enforces.
+        vetoes = {"type": "array", "items": {"type": "string", "enum": ids},
+                  "minItems": 1 if status == "VETO" else 0,
+                  "maxItems": len(ids) if status == "VETO" else 0}
+        properties = {
             "context_hash": {"type": "string", "const": context.content_hash},
-            "status": {"type": "string", "enum": ["UNKNOWN", "NO_VETO", "VETO"]},
-            "vetoed_candidate_ids": {"type": "array", "items": {
-                "type": "string", "enum": [value.candidate_id for value in context.request.plan.candidates],
-            }, "maxItems": len(context.request.plan.candidates)},
+            "status": {"type": "string", "const": status},
+            "vetoed_candidate_ids": vetoes,
             "explanation": {"type": "string", "maxLength": 512},
-        }, "required": ["context_hash", "status", "vetoed_candidate_ids", "explanation"],
-        "additionalProperties": False,
-    }
+        }
+        if decision_first:
+            # Keep request-dependent hash tokens after the causal qualification decision.
+            properties["context_hash"] = properties.pop("context_hash")
+        variants.append({
+            "type": "object", "properties": properties,
+            "required": ["context_hash", "status", "vetoed_candidate_ids", "explanation"],
+            "additionalProperties": False,
+        })
+    return {"oneOf": variants}

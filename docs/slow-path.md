@@ -30,6 +30,8 @@ AgentInput + один immutable Fast plan
 
 Одновременно держим не более одного active и одного pending запроса. Новый pending вытесняет прежний. Большие данные проходят через фиксированные shared buffers (input 4 MiB / output 8192 bytes), уведомления — короткие Pipe frames; бесконечных очередей и feeder threads нет.
 
+Для native qualification добавлен отдельный Metal execution profile и Darwin teardown с bounded `ps`-подтверждением смерти группы. CPU defaults и default HybridDriveAgent не меняются. [Визуальная квалификация, сравнение моделей и native изоляция](qualification.md).
+
 Один владелец вызывает `submit/poll` на fast ticks; именно эти вызовы обслуживают deadline. Самостоятельного watchdog нет. Model startup входит в deadline. Timeout завершает всю POSIX process group, включая llama-server; новый worker запускаем только после завершения старой группы. `close` ограничен 0.5 с и сообщает ошибку, если завершение не подтверждено. Подтверждение отсутствия живых потомков рассчитано на Linux/Docker. В контейнерных запусках используем `--init`, чтобы reaping orphan children не зависел от Python как PID 1.
 
 Диагностический буфер хранит максимум два completion. Для полного журнала нужно регулярно `poll`; потери отражаются в `dropped_completion_count`, totals — в `outcome_counts`. Ошибки backend не пересылают произвольный текст исключений. Invalid/timeout/неприменимый ответ остаётся `UNKNOWN`, кинематика и fallback не отключаются.
