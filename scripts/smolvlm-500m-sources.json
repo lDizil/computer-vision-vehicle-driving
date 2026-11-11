@@ -1,0 +1,26 @@
+{
+  "schema": "hybrid-drive-smolvlm-500m-q8-v1",
+  "model_version": "smolvlm-500m-q8-72e9860-llama372dc5c-v1",
+  "license": "Apache-2.0",
+  "runtime_license": "MIT",
+  "runtime_revision": "372dc5ca157276beb6c67b2e92477e8d662e964a",
+  "repository": "ggml-org/SmolVLM-500M-Instruct-GGUF",
+  "files": [
+    {
+      "path": "SmolVLM-500M-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/72e986006ef53e37cdd3f6d4241c90b0f01df376/SmolVLM-500M-Instruct-Q8_0.gguf",
+      "revision": "72e986006ef53e37cdd3f6d4241c90b0f01df376",
+      "size_bytes": 436806912,
+      "sha256": "9d4612de6a42214499e301494a3ecc2be0abdd9de44e663bda63f1152fad1bf4",
+      "etag": "06b83d3cadb7f251f5bd0d3e056a88f0e18917da36318678ac29e29e823d774d"
+    },
+    {
+      "path": "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/72e986006ef53e37cdd3f6d4241c90b0f01df376/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "revision": "72e986006ef53e37cdd3f6d4241c90b0f01df376",
+      "size_bytes": 108783360,
+      "sha256": "d1eb8b6b23979205fdf63703ed10f788131a3f812c7b1f72e0119d5d81295150",
+      "etag": "91f9ab803a12d56fa22379bd101b2d8868ad0b72fa86854adbae11373df40446"
+    }
+  ]
+}

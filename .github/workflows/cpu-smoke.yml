@@ -20,8 +20,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build pinned CPU environment
         run: docker build --tag hybrid-drive:cpu .
+      - name: Replay slow-path temporal contracts without inference
+        run: |
+          mkdir -p "$RUNNER_TEMP/navsim-results"
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/navsim-results:/results" \
+            hybrid-drive:cpu python -m scripts.run_slow_replay --output /results/slow-replay.json
       - name: Exercise real upstream without network or datasets
-        run: docker run --rm --cpus 1 --memory 2g --memory-swap 2g --network none hybrid-drive:cpu
+        run: docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none hybrid-drive:cpu
       - name: Prepare the pinned real-data sample
         run: python3 scripts/prepare_navsim_sample.py --root "$RUNNER_TEMP/navsim-data" --rate-limit-mib 4
       - name: Evaluate one real ConstantVelocityAgent scene
@@ -47,6 +54,7 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
           path: |
+            ${{ runner.temp }}/navsim-results/slow-replay.json
             ${{ runner.temp }}/navsim-results/**/*.log
             ${{ runner.temp }}/navsim-results/**/result.json
             ${{ runner.temp }}/navsim-results/**/decision.json
