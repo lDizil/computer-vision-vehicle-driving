@@ -12,6 +12,31 @@ MAX_EXPLANATION_CHARS = 512
 _RESPONSE_KEYS = {"context_hash", "status", "vetoed_candidate_ids", "explanation"}
 
 
+class InvalidSlowOutput(ValueError):
+    """A provider rejected output; bounded raw text is retained for audit, never applied."""
+
+    def __init__(self, message: str, raw_response: str | None = None):
+        super().__init__(message)
+        self.raw_response = None
+        if isinstance(raw_response, str) and len(raw_response) <= MAX_RESPONSE_BYTES:
+            try:
+                if len(raw_response.encode("utf-8")) <= MAX_RESPONSE_BYTES:
+                    self.raw_response = raw_response
+            except UnicodeError:
+                pass
+
+
+def bounded_prompt(text: str) -> str:
+    if not isinstance(text, str) or len(text) > MAX_PROMPT_BYTES:
+        raise ValueError("Prompt builder must return at most 32 KiB of UTF-8 text")
+    try:
+        if len(text.encode("utf-8")) > MAX_PROMPT_BYTES:
+            raise ValueError("Prompt builder must return at most 32 KiB of UTF-8 text")
+    except UnicodeError as exc:
+        raise ValueError("Prompt builder must return valid UTF-8 text") from exc
+    return text
+
+
 def make_prompt(context: SlowContext) -> str:
     if not isinstance(context, SlowContext):
         raise ValueError("context must be SlowContext")
