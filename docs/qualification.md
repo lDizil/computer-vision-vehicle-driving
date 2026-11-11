@@ -88,3 +88,7 @@ PYTHONPATH=src "$HOME/Desktop/СМЗ/.venv/bin/python" -m scripts.prepare_slow_s
 Darwin teardown учитывает EPERM гонки/ограничения: сигнал leader — best effort, освобождение только после смерти leader и bounded `ps`-подтверждения отсутствия живой группы. Ошибка проверки остаётся fail-closed, cleanup имеет общий бюджет. Native RSS — максимум reaped child process, **не** aggregate/unified GPU memory. Для device memory отдельного измерения пока нет.
 
 CI запускает полный dataset-free suite и настоящие обе Smol-модели на явно названном smoke subset q00/q01/q08. Это не тихий skip полного набора; полный controlled run и реальные hardware результаты фиксируем в MV-146. Qwen — отдельный native Metal experiment; CI не заявляет его weighted CPU-проверку в лимите 2 GiB.
+
+## Двухшаговый projected profile
+
+`--profile grounded-v1` отделяет оценку наблюдаемости сцены от классификации перекрытия пути. `--suite validation` выбирает фиксированные новые геометрии, сохраняя старый controlled default. [Контракт, trace, границы и native profile](slow-grounding.md).

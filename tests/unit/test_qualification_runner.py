@@ -8,6 +8,7 @@ from hybrid_drive.qualification.cases import build_suite
 from hybrid_drive.qualification.prompt import projected_prompt
 from hybrid_drive.qualification.runner import run_qualification, wait_for_completion
 from hybrid_drive.slow.worker import SlowCompletion
+from hybrid_drive.slow.llama import LlamaServerFactory
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,14 @@ class Factory:
     threads: int = 1
     max_tokens: int = 512
     decision_first: bool = True
+    image_min_tokens: int | None = None
+    image_max_tokens: int = 64
+    context_size: int = 4096
+    cache_prompt: bool = True
+    prompts_for = LlamaServerFactory.prompts_for
+    parse_output = LlamaServerFactory.parse_output
+    expected_output_fields = LlamaServerFactory.expected_output_fields
+    protocol_name = LlamaServerFactory.protocol_name
     prompt_builder = staticmethod(projected_prompt)
 
 
@@ -28,7 +37,7 @@ class Worker:
     fail_close = False
     hash_first = False
 
-    def __init__(self, factory, version):
+    def __init__(self, factory, version, *, response_parser):
         self.context = None
         self.closed = False
         self.queue_depth = 0
@@ -98,6 +107,11 @@ def test_real_report_and_matched_matrix_preserve_negative_unknown_result(environ
         assert list(json.loads(row["raw_response"])) == [
             "status", "vetoed_candidate_ids", "explanation", "context_hash"]
         assert row["input_hash"] == next(case.input_hash for case in suite.cases if case.case_id == row["case_id"])
+        case = next(case for case in suite.cases if case.case_id == row["case_id"])
+        restored = case.to_context(factories[row["model_id"]].model_version, request_id=row["request_id"],
+                                   submitted_at_monotonic_s=row["submitted_at_monotonic_s"],
+                                   deadline_monotonic_s=row["deadline_monotonic_s"])
+        assert restored.content_hash == row["context_hash"] == json.loads(row["raw_response"])["context_hash"]
 
 
 @pytest.mark.parametrize("outcome,status", [("invalid_output", "completed"), ("timeout", "failed"),
@@ -221,3 +235,21 @@ def test_default_hash_first_consumers_keep_their_original_order(environment, tmp
     assert all(row["outcome"] == "completed" and row["status"] == "UNKNOWN" for row in records)
     provenance = json.loads((directory / "manifest.json").read_text())["provenance"]
     assert provenance["commit_reference_supplied"] is False
+
+
+def test_prompt_program_hash_includes_each_declared_conditional_stage(environment, tmp_path, monkeypatch):
+    import hashlib
+
+    suite, factories = environment
+    monkeypatch.setattr(Factory, "prompts_for", lambda self, context: ("visibility question", projected_prompt(context)))
+    directory, result = run_qualification(suite, factories, tmp_path, revision="a" * 40,
+                                          prompt_version="two-stage-test")
+    rows = json.loads((directory / "records.json").read_text())
+    context = suite.cases[0].to_context("small-v1", request_id="irrelevant", submitted_at_monotonic_s=0,
+                                       deadline_monotonic_s=1)
+    program = json.dumps(("visibility question", projected_prompt(context)), ensure_ascii=False,
+                         separators=(",", ":"))
+    assert rows[0]["prompt_sha256"] == hashlib.sha256(program.encode()).hexdigest()
+    assert all(row["declared_prompt_stages"] == 2 for row in rows)
+    assert json.loads((directory / "manifest.json").read_text())["provenance"]["prompt_version"] == "two-stage-test"
+    assert result["status"] == "completed"

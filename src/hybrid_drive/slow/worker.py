@@ -16,7 +16,7 @@ from hybrid_drive.contracts._validation import finite_real, identifier
 from hybrid_drive.contracts.slow import SlowResult
 
 from .context import SlowContext
-from .protocol import InvalidSlowOutput, make_prompt, parse_response
+from .protocol import BackendFailureWithTrace, InvalidSlowOutput, make_prompt, parse_response
 
 
 _OUTPUT_LIMIT = 8192
@@ -49,15 +49,16 @@ class AsyncSlowWorker:
     submit/poll; this offline path does not guarantee a 10 Hz fast loop.
     """
 
-    def __init__(self, factory, model_version: str, *, clock=time.monotonic):
+    def __init__(self, factory, model_version: str, *, clock=time.monotonic, response_parser=parse_response):
         identifier(model_version, "model_version")
-        if not callable(factory) or not callable(clock):
-            raise ValueError("factory and clock must be callable")
+        if not callable(factory) or not callable(clock) or not callable(response_parser):
+            raise ValueError("factory, clock and response_parser must be callable")
         if getattr(factory, "model_version", model_version) != model_version:
             raise ValueError("Factory model_version does not match worker")
         self.model_version = model_version
         self._factory = factory
         self._clock = clock
+        self._response_parser = response_parser
         self._mp = mp.get_context("spawn")
         self._process = None
         self._input = self._task_reader = self._input_buffer = None
@@ -185,15 +186,23 @@ class AsyncSlowWorker:
             if token != self._token or digest.decode("ascii") != self._active.content_hash:
                 raise ValueError("Mismatched worker envelope")
             outcome, result = "backend_error", None
-            if code in (b"C", b"I"):
+            if code in (b"C", b"I", b"B"):
                 if length > _OUTPUT_LIMIT:
                     raise ValueError("Oversized worker output")
                 if length or code == b"C":
                     raw = bytes(memoryview(self._buffer).cast("B")[:length]).decode("utf-8")
             if code == b"C":
-                result = parse_response(raw, self._active)
-                result.validate_for(self._active.request)
-                outcome = "completed"
+                try:
+                    result = self._response_parser(raw, self._active)
+                except ValueError:
+                    raise
+                except Exception:
+                    result = None
+                if isinstance(result, SlowResult):
+                    result.validate_for(self._active.request)
+                    outcome = "completed"
+                else:
+                    result, outcome = None, "backend_error"
             elif code == b"I":
                 outcome = "invalid_output"
             elif code != b"B":
@@ -386,11 +395,11 @@ def _child_main(factory, model_version, inputs, input_buffer, writer, buffer):
                 output = output or b""
             except InvalidSlowOutput as exc:
                 code, output = b"I", _bounded_output_bytes(exc.raw_response) or b""
+            except BackendFailureWithTrace as exc:
+                code, output = b"B", _bounded_output_bytes(exc.raw_response) or b""
             except Exception:
                 # Neither exception messages nor model traceback cross IPC.
                 code, output = b"B", b""
-            if code == b"B":
-                output = b""
             memoryview(buffer).cast("B")[:len(output)] = output
             writer.send_bytes(_NOTICE.pack(token, context.content_hash.encode("ascii"), code, len(output)))
     finally:

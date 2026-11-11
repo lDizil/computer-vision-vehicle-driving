@@ -73,6 +73,17 @@ jobs:
             --assets-root /assets --output-root /results --models 256m 500m \
             --case-ids q00 q01 q08 --threads 1 --deadline-seconds 120 --revision "$SOURCE_REVISION" \
             2>&1 | tee "$RUNNER_TEMP/qualification-results/qualification.log"
+      - name: Exercise the real two-stage projected protocol on the pinned CPU baseline
+        run: |
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" --env HF_HUB_OFFLINE=1 \
+            -v "$RUNNER_TEMP/qualification-assets:/assets:ro" \
+            -v "$RUNNER_TEMP/qualification-results:/results" \
+            hybrid-drive:qualification python -m scripts.run_slow_qualification \
+            --assets-root /assets --output-root /results/grounded-smoke --models 256m \
+            --profile grounded-v1 --case-ids q00 q08 --threads 1 --max-tokens 256 \
+            --deadline-seconds 120 --revision "$SOURCE_REVISION" \
+            2>&1 | tee "$RUNNER_TEMP/qualification-results/grounded-smoke.log"
       - name: Save diagnostic reports, never model weights
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
