@@ -21,7 +21,10 @@ def write_html(path, suite, records, summary, *, provenance: dict, execution: di
              f'<p>Версия набора: {_text(suite.version)}. Охват: '
              f'{"SMOKE — подмножество" if summary["scope"] == "smoke_subset" else "полный контролируемый набор"}; '
              f'сцен: {summary["case_count"]}; seeds: {_text(summary["seeds"])}.</p>',
-             '<p>Кандидаты на входных изображениях: первый — cyan (0, 200, 220), '
+             f'<p>Роль набора: {_text(suite.manifest().get("suite_role", "controlled_diagnostic"))}.</p>',
+              '<p>Для многошагового протокола raw response — trace с исходными ответами каждого этапа; '
+              'объяснение итогового решения может быть детерминированным отображением этих категорий.</p>',
+              '<p>Кандидаты на входных изображениях: первый — cyan (0, 200, 220), '
              'второй — magenta (220, 0, 180). Эталон показан отдельно и не добавлен к входу модели.</p>',
              '<h2>Качество и отказы</h2>', _quality_table(summary),
              '<h2>Измеренное время</h2>', _latency_table(summary),

@@ -97,6 +97,7 @@ class QualificationSuite:
     cases: tuple[QualificationCase, ...]
     pairs: tuple[CounterfactualPair, ...]
     version: str
+    definition_json: str | None = None
 
     def __post_init__(self):
         _identifier(self.version, "version")
@@ -108,6 +109,11 @@ class QualificationSuite:
         by_id = {case.case_id: case for case in cases}
         if len(by_id) != len(cases) or len({pair.pair_id for pair in pairs}) != len(pairs):
             raise ValueError("Case and pair IDs must be unique")
+        definition = _suite_definition(self.version, self.definition_json)
+        if definition is not None and not set(by_id) <= set(definition["full_case_ids"]):
+            raise ValueError("Suite contains cases outside its definition")
+        if self.definition_json is not None:
+            object.__setattr__(self, "definition_json", _json(definition))
         edges = set()
         for pair in pairs:
             edge = (pair.kind, frozenset((pair.first_case_id, pair.second_case_id)))
@@ -130,39 +136,41 @@ class QualificationSuite:
         selected = set(requested)
         return QualificationSuite(tuple(case for case in self.cases if case.case_id in selected),
                                   tuple(pair for pair in self.pairs if
-                                        {pair.first_case_id, pair.second_case_id} <= selected), self.version)
+                                        {pair.first_case_id, pair.second_case_id} <= selected),
+                                  self.version, self.definition_json)
 
     def manifest(self) -> dict:
-        full = self.version == VERSION and {case.case_id for case in self.cases} == set(FULL_CASE_IDS)
+        definition = _suite_definition(self.version, self.definition_json)
+        full_ids = definition["full_case_ids"] if definition is not None else ()
+        full = bool(full_ids) and {case.case_id for case in self.cases} == set(full_ids)
         known = [case for case in self.cases if case.expected_status is not RiskStatus.UNKNOWN]
         positives = sum(len(case.expected_veto_ids) for case in known)
         total = sum(len(case.plan.candidates) for case in known)
-        return {
+        manifest = {
             "version": self.version, "scope": "controlled_suite" if full else "smoke_subset",
-            "case_count": len(self.cases), "full_suite_case_count": len(FULL_CASE_IDS),
+            "case_count": len(self.cases), "full_suite_case_count": len(full_ids),
             "label_source": "analytic_controlled_scene", "real_street_or_holdout": False,
             "label_contract": "Future candidate centreline intersects the solid box ground footprint; "
                               "not swept-vehicle collision, dynamics or road-safety qualification.",
-            "hand_checked_geometry": {"left_path_xy_m": [[2, .2], [4, .5], [6, 1], [8, 1.5], [10, 2]],
-                                      "right_path_y": "negative of left path y",
-                                      "boxes_centres_xy_m": [[8, 1.5], [8, -1.5]],
-                                      "box_dimensions_lwh_m": [1.3, 1.1, 1.4],
-                                      "check": "At x=8 the matching path goes through the footprint centre; "
-                                               "the opposite path stays on the other side of y=0."},
             "known_candidate_units": total, "risk_units": positives, "clear_units": total - positives,
             "unknown_controls": len(self.cases) - len(known),
             "blank_control": "Raw views are black; projected candidate overlays are retained. "
                              "No observed world evidence means UNKNOWN, not inferred clear road.",
             "overlay_colors_by_candidate_order_rgb": [list(color) for color in CANDIDATE_COLORS],
-            "rig": {"provenance": "synthetic pinhole, not NAVSIM calibration", "ego_axes": "x forward, y left, z up",
-                    "cameras": [{"name": camera.name, "width": camera.width, "height": camera.height,
-                                 "intrinsic": camera.intrinsic.tolist(),
-                                 "ego_to_camera": camera.ego_to_camera.tolist(), "near_m": camera.near_m}
-                                for camera in schematic_calibrations()]},
             "cases": [_case_manifest(case) for case in self.cases],
             "pairs": [dict(pair_id=pair.pair_id, kind=pair.kind, first_case_id=pair.first_case_id,
                            second_case_id=pair.second_case_id) for pair in self.pairs],
         }
+        if definition is not None:
+            manifest["hand_checked_geometry"] = definition["hand_checked_geometry"]
+            manifest["rig"] = definition["rig"]
+            if self.definition_json is not None:
+                manifest["suite_role"] = definition["suite_role"]
+        else:
+            manifest["label_source"] = "unspecified"
+            manifest["label_contract"] = "unspecified"
+            manifest["blank_control"] = "unspecified"
+        return manifest
 
 
 def build_suite() -> QualificationSuite:
@@ -197,6 +205,64 @@ def build_suite() -> QualificationSuite:
     pairs += [CounterfactualPair(f"binding-{a:02d}-{b:02d}", "candidate_change", f"q{a:02d}", f"q{b:02d}")
               for a, b in ((0, 4), (1, 5), (2, 6), (3, 7), (8, 9))]
     return QualificationSuite(tuple(cases), tuple(pairs), VERSION)
+
+
+def _suite_definition(version, definition_json):
+    if definition_json is None:
+        return _legacy_definition() if version == VERSION else None
+    if not isinstance(definition_json, str):
+        raise ValueError("Suite definition must be a JSON string")
+    try:
+        definition = json.loads(definition_json, object_pairs_hook=_unique_json_object)
+        _json(definition)
+    except (ValueError, TypeError, OverflowError, RecursionError) as exc:
+        raise ValueError("Suite definition must be finite JSON with unique keys") from exc
+    fields = {"full_case_ids", "suite_role", "hand_checked_geometry", "rig"}
+    if not isinstance(definition, dict) or set(definition) != fields:
+        raise ValueError("Suite definition has an invalid schema")
+    ids = definition["full_case_ids"]
+    if not isinstance(ids, list) or not ids:
+        raise ValueError("Suite definition requires full_case_ids")
+    for case_id in ids:
+        _identifier(case_id, "full case ID")
+    if len(set(ids)) != len(ids):
+        raise ValueError("Suite definition full_case_ids must be unique")
+    if definition["suite_role"] not in ("controlled_diagnostic", "synthetic_validation"):
+        raise ValueError("Suite definition has an invalid role")
+    for name in ("hand_checked_geometry", "rig"):
+        if not isinstance(definition[name], dict) or not definition[name]:
+            raise ValueError(f"Suite definition {name} must be a nonempty object")
+    return definition
+
+
+def _unique_json_object(items):
+    result = {}
+    for key, value in items:
+        if key in result:
+            raise ValueError("Duplicate suite definition key")
+        result[key] = value
+    return result
+
+
+def _legacy_definition():
+    return {
+        "full_case_ids": list(FULL_CASE_IDS), "suite_role": "controlled_diagnostic",
+        "hand_checked_geometry": {"left_path_xy_m": [[2, .2], [4, .5], [6, 1], [8, 1.5], [10, 2]],
+                                  "right_path_y": "negative of left path y",
+                                  "boxes_centres_xy_m": [[8, 1.5], [8, -1.5]],
+                                  "box_dimensions_lwh_m": [1.3, 1.1, 1.4],
+                                  "check": "At x=8 the matching path goes through the footprint centre; "
+                                           "the opposite path stays on the other side of y=0."},
+        "rig": _rig_manifest(),
+    }
+
+
+def _rig_manifest():
+    return {"provenance": "synthetic pinhole, not NAVSIM calibration", "ego_axes": "x forward, y left, z up",
+            "cameras": [{"name": camera.name, "width": camera.width, "height": camera.height,
+                         "intrinsic": camera.intrinsic.tolist(),
+                         "ego_to_camera": camera.ego_to_camera.tolist(), "near_m": camera.near_m}
+                        for camera in schematic_calibrations()]}
 
 
 def _validate_pair(pair, first, second):

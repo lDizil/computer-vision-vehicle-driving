@@ -18,7 +18,8 @@ from .prompt import PROMPT_VERSION
 from .report import write_html
 
 
-def run_qualification(suite, factories, output_root, *, revision, seeds=(0,), deadline_s=60):
+def run_qualification(suite, factories, output_root, *, revision, seeds=(0,), deadline_s=60,
+                      prompt_version=PROMPT_VERSION):
     if revision != "working-tree" and (not isinstance(revision, str) or len(revision) != 40
                                       or any(c not in "0123456789abcdef" for c in revision)):
         raise ValueError("revision must be an exact commit or explicit working-tree diagnostic")
@@ -42,7 +43,9 @@ def run_qualification(suite, factories, output_root, *, revision, seeds=(0,), de
     provenance = {
         "source_revision": revision, "commit_reference_supplied": revision != "working-tree",
         "platform": platform.platform(), "architecture": platform.machine(),
-        "python_version": platform.python_version(), "prompt_version": PROMPT_VERSION,
+        "python_version": platform.python_version(), "prompt_version": prompt_version,
+        "prompt_hash_definition": "Single prompt: UTF8 bytes; multi-stage: canonical JSON ordered prompt program. "
+                                  "Conditional stages may be skipped; actual provider replies remain in raw trace.",
         "deadline_seconds": deadline_s, "seeds": list(seeds),
         "scope": "controlled_schematic_diagnostic_not_road_qualification",
         "models": {model: _factory_metadata(factory) for model, factory in factories.items()},
@@ -55,7 +58,7 @@ def run_qualification(suite, factories, output_root, *, revision, seeds=(0,), de
         for model, base_factory in factories.items():
             for seed in seeds:
                 factory = replace(base_factory, seed=seed)
-                worker = AsyncSlowWorker(factory, factory.model_version)
+                worker = AsyncSlowWorker(factory, factory.model_version, response_parser=factory.parse_output)
                 try:
                     for index, case in enumerate(suite.cases):
                         row = _attempt(worker, factory, case, model, seed, deadline_s, run_dir, index)
@@ -98,12 +101,19 @@ def _attempt(worker, factory, case, model, seed, deadline_s, run_dir, index):
     request_id = "qualification-" + uuid4().hex
     context = case.to_context(factory.model_version, request_id=request_id,
                               submitted_at_monotonic_s=started, deadline_monotonic_s=started + deadline_s)
-    prompt = bounded_prompt(factory.prompt_builder(context))
+    prompts = tuple(bounded_prompt(prompt) for prompt in factory.prompts_for(context))
+    if not prompts:
+        raise ValueError("At least one declared prompt is required")
+    prompt = prompts[0] if len(prompts) == 1 else json.dumps(prompts, ensure_ascii=False, separators=(",", ":"))
     row = {
         "model_id": model, "case_id": case.case_id, "seed": seed, "outcome": "backend_error",
         "status": None, "vetoed_candidate_ids": [], "explanation": None,
         "latency_s": 0.0, "raw_response": None, "input_hash": case.input_hash, "request_id": request_id,
+        "context_hash": context.content_hash,
+        "submitted_at_monotonic_s": context.request.submitted_at_monotonic_s,
+        "deadline_monotonic_s": context.request.deadline_monotonic_s,
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "declared_prompt_stages": len(prompts),
     }
     prompt_name = f"{index:03d}-{seed}-{hashlib.sha256(model.encode()).hexdigest()[:12]}.txt"
     (run_dir / "prompts" / prompt_name).write_text(prompt)
@@ -114,8 +124,8 @@ def _attempt(worker, factory, case, model, seed, deadline_s, run_dir, index):
             row["outcome"] = "process_exit"
         else:
             row["raw_response"] = completion.raw_response
-            if completion.outcome == "completed" and factory.decision_first:
-                _require_decision_first(completion.raw_response)
+            if completion.outcome == "completed" and factory.expected_output_fields is not None:
+                _require_decision_first(completion.raw_response, factory.expected_output_fields)
             row["outcome"] = completion.outcome
             if completion.result is not None:
                 row.update(status=completion.result.status.value,
@@ -131,12 +141,11 @@ class DecisionOrderError(ValueError):
     pass
 
 
-def _require_decision_first(raw):
+def _require_decision_first(raw, expected=("status", "vetoed_candidate_ids", "explanation", "context_hash")):
     try:
         payload = json.loads(raw, object_pairs_hook=tuple)
     except (ValueError, TypeError, RecursionError) as exc:
         raise DecisionOrderError("Completed response is not a decision-first JSON object") from exc
-    expected = ("status", "vetoed_candidate_ids", "explanation", "context_hash")
     if not isinstance(payload, tuple) or tuple(key for key, _ in payload) != expected:
         raise DecisionOrderError("Completed response violated decision-first JSON key order")
 
@@ -158,7 +167,9 @@ def _factory_metadata(factory):
         "runtime_revision": factory.sources["runtime_revision"],
         "execution_profile": factory.execution_profile, "threads": factory.threads,
         "temperature": 0, "max_tokens": factory.max_tokens,
-        "context_size": 4096, "image_max_tokens": 64,
+        "context_size": factory.context_size, "image_min_tokens": factory.image_min_tokens,
+        "image_max_tokens": factory.image_max_tokens, "cache_prompt": factory.cache_prompt,
+        "response_protocol": factory.protocol_name,
         "decision_first": factory.decision_first,
         "offline_local_files": True,
         "network_isolation": "OS_process_network_not_disabled; loopback_only_backend; runtime_offline_and_no_CURL"
@@ -169,7 +180,10 @@ def _factory_metadata(factory):
 def _execution_profile(factory):
     return {"runtime_revision": factory.sources["runtime_revision"],
             "execution_profile": factory.execution_profile, "threads": factory.threads,
-            "max_tokens": factory.max_tokens, "decision_first": factory.decision_first}
+            "max_tokens": factory.max_tokens, "decision_first": factory.decision_first,
+            "context_size": factory.context_size, "image_min_tokens": factory.image_min_tokens,
+            "image_max_tokens": factory.image_max_tokens, "cache_prompt": factory.cache_prompt,
+            "response_protocol": factory.protocol_name}
 
 
 def write_json(path, value):

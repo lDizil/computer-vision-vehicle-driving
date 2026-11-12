@@ -17,13 +17,25 @@ class InvalidSlowOutput(ValueError):
 
     def __init__(self, message: str, raw_response: str | None = None):
         super().__init__(message)
-        self.raw_response = None
-        if isinstance(raw_response, str) and len(raw_response) <= MAX_RESPONSE_BYTES:
-            try:
-                if len(raw_response.encode("utf-8")) <= MAX_RESPONSE_BYTES:
-                    self.raw_response = raw_response
-            except UnicodeError:
-                pass
+        self.raw_response = _retained_response(raw_response)
+
+
+class BackendFailureWithTrace(RuntimeError):
+    """Technical failure with an explicitly supplied bounded provider trace, not exception text."""
+
+    def __init__(self, message: str, raw_response: str | None = None):
+        super().__init__(message)
+        self.raw_response = _retained_response(raw_response)
+
+
+def _retained_response(raw):
+    if isinstance(raw, str) and len(raw) <= MAX_RESPONSE_BYTES:
+        try:
+            if len(raw.encode("utf-8")) <= MAX_RESPONSE_BYTES:
+                return raw
+        except UnicodeError:
+            pass
+    return None
 
 
 def bounded_prompt(text: str) -> str:
@@ -70,18 +82,7 @@ def make_prompt(context: SlowContext) -> str:
 def parse_response(raw: str, context: SlowContext) -> SlowResult:
     if not isinstance(context, SlowContext):
         raise ValueError("context must be SlowContext")
-    if not isinstance(raw, str) or len(raw) > MAX_RESPONSE_BYTES:
-        raise ValueError("Slow response must be a string of at most 8192 UTF-8 bytes")
-    try:
-        size = len(raw.encode("utf-8"))
-    except UnicodeError as exc:
-        raise ValueError("Slow response must be valid UTF-8") from exc
-    if size > MAX_RESPONSE_BYTES:
-        raise ValueError("Slow response exceeds 8192 UTF-8 bytes")
-    try:
-        payload = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
-    except (ValueError, RecursionError) as exc:
-        raise ValueError("Slow response must be one strict JSON object") from exc
+    payload = decode_response_object(raw)
     if not isinstance(payload, dict) or payload.keys() != _RESPONSE_KEYS:
         raise ValueError("Slow response must contain exactly the four response keys")
     if payload["context_hash"] != context.content_hash:
@@ -115,6 +116,24 @@ def parse_response(raw: str, context: SlowContext) -> SlowResult:
         candidates_hash=plan.candidates_hash, model_version=request.model_version,
         status=status, vetoed_candidate_ids=tuple(ids), explanation=explanation,
     )
+
+
+def decode_response_object(raw: str) -> dict:
+    if not isinstance(raw, str) or len(raw) > MAX_RESPONSE_BYTES:
+        raise ValueError("Slow response must be a string of at most 8192 UTF-8 bytes")
+    try:
+        size = len(raw.encode("utf-8"))
+    except UnicodeError as exc:
+        raise ValueError("Slow response must be valid UTF-8") from exc
+    if size > MAX_RESPONSE_BYTES:
+        raise ValueError("Slow response exceeds 8192 UTF-8 bytes")
+    try:
+        payload = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    except (ValueError, RecursionError) as exc:
+        raise ValueError("Slow response must be one strict JSON object") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Slow response must be one strict JSON object")
+    return payload
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict:

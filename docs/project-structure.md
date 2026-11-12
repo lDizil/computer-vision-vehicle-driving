@@ -133,3 +133,5 @@ FSDrive со своим CUDA/PyTorch-стеком позднее изолиру�
 ## Геометрия и визуальная квалификация
 
 `geometry/` владеет калибровкой и проекцией ground trajectories в изображение. `qualification/` отделяет контролируемые сцены и их labels от model inputs, считает matched-input метрики и формирует самостоятельный HTML-отчёт. Runner поддерживает одинаковые CPU или native Metal profiles для сравниваемых моделей; semantic veto автоматически не включает. [Контракт, ограничения и запуск](qualification.md).
+
+`slow/grounding.py` реализует двухшаговый projected visual predictor и строгий адаптер категорий в `SlowResult`; числовая геометрия уже представлена фактическими калиброванными overlays. `qualification/validation.py` задаёт отдельные frozen synthetic геометрии. [Владение протоколом и поток](slow-grounding.md).

@@ -17,7 +17,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from hybrid_drive.assets.slow import verify_slow
 from .context import SlowContext
-from .protocol import InvalidSlowOutput, MAX_RESPONSE_BYTES, bounded_prompt, make_prompt
+from .protocol import InvalidSlowOutput, MAX_RESPONSE_BYTES, bounded_prompt, make_prompt, parse_response
 
 
 MAX_HTTP_BYTES = 256 * 1024
@@ -36,6 +36,10 @@ class LlamaServerFactory:
     threads: int = 1
     prompt_builder: Callable[[SlowContext], str] = make_prompt
     decision_first: bool = False
+    image_min_tokens: int | None = None
+    image_max_tokens: int = 64
+    context_size: int = 4096
+    cache_prompt: bool = True
 
     @property
     def model_version(self):
@@ -43,6 +47,22 @@ class LlamaServerFactory:
 
     def __call__(self):
         return LlamaVisionBackend(self)
+
+    def prompts_for(self, context):
+        return (bounded_prompt(self.prompt_builder(context)),)
+
+    def parse_output(self, raw, context):
+        return parse_response(raw, context)
+
+    @property
+    def protocol_name(self):
+        return "direct-json-v1"
+
+    @property
+    def expected_output_fields(self):
+        if self.decision_first:
+            return ("status", "vetoed_candidate_ids", "explanation", "context_hash")
+        return None
 
 
 class LlamaVisionBackend:
@@ -57,6 +77,22 @@ class LlamaVisionBackend:
             raise ValueError("Local model runtime differs from the pinned revision")
         if isinstance(config.max_tokens, bool) or not isinstance(config.max_tokens, int) or not 1 <= config.max_tokens <= 512:
             raise ValueError("Generation must be bounded to 1..512 tokens")
+        if (isinstance(config.image_max_tokens, bool) or not isinstance(config.image_max_tokens, int)
+                or not 1 <= config.image_max_tokens <= 1024):
+            raise ValueError("Image maximum tokens must be in 1..1024")
+        if config.image_min_tokens is not None:
+            if (isinstance(config.image_min_tokens, bool) or not isinstance(config.image_min_tokens, int)
+                    or not 1 <= config.image_min_tokens <= 1024):
+                raise ValueError("Image minimum tokens must be in 1..1024")
+            if config.image_min_tokens > config.image_max_tokens:
+                raise ValueError("Image minimum tokens must not exceed the maximum")
+        if (isinstance(config.context_size, bool) or not isinstance(config.context_size, int)
+                or not 1024 <= config.context_size <= 16384):
+            raise ValueError("Context size must be in 1024..16384")
+        if config.context_size <= config.max_tokens:
+            raise ValueError("Context size must exceed the generation token budget")
+        if not isinstance(config.cache_prompt, bool):
+            raise ValueError("cache_prompt must be a boolean")
         for value in (config.startup_timeout_s, config.request_timeout_s):
             if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not 0 < value <= 120:
                 raise ValueError("HTTP/startup timeouts must be in (0, 120] seconds")
@@ -94,9 +130,11 @@ class LlamaVisionBackend:
             "--mmproj", str(root / config.sources["files"][1]["path"]),
             "--host", "127.0.0.1", "--port", str(port),
             "--threads", str(config.threads), "--threads-batch", str(config.threads),
-            "--parallel", "1", "--ctx-size", "4096",
-            "--image-max-tokens", "64", "--offline", "--no-webui", "--log-disable",
+            "--parallel", "1", "--ctx-size", str(config.context_size),
+            "--image-max-tokens", str(config.image_max_tokens), "--offline", "--no-webui", "--log-disable",
         ]
+        if config.image_min_tokens is not None:
+            command += ["--image-min-tokens", str(config.image_min_tokens)]
         command += (["--gpu-layers", "0", "--no-mmproj-offload"] if config.execution_profile == "cpu"
                     else ["--gpu-layers", "999", "--mmproj-offload", "--device", metal_device])
         # Inherit the worker's group: killing a client alone would leave inference running.
@@ -132,6 +170,10 @@ class LlamaVisionBackend:
         return json.loads(raw)
 
     def generate(self, context):
+        return self.complete(context, prompt=self.config.prompt_builder(context),
+                             schema=response_schema(context, decision_first=self.config.decision_first))
+
+    def complete(self, context, *, prompt, schema):
         from PIL import Image
 
         if context.request.model_version != self.config.model_version:
@@ -143,13 +185,13 @@ class LlamaVisionBackend:
             Image.fromarray(camera.rgb, mode="RGB").save(image, format="PNG")
             url = "data:image/png;base64," + base64.b64encode(image.getvalue()).decode("ascii")
             content.append({"type": "image_url", "image_url": {"url": url}})
-        prompt = bounded_prompt(self.config.prompt_builder(context))
+        prompt = bounded_prompt(prompt)
         content.append({"type": "text", "text": prompt})
         payload = {
             "messages": [{"role": "user", "content": content}], "temperature": 0,
             "seed": self.config.seed, "max_tokens": self.config.max_tokens, "stream": False,
-            "response_format": {"type": "json_object", "schema": response_schema(
-                context, decision_first=self.config.decision_first)},
+            "cache_prompt": self.config.cache_prompt,
+            "response_format": {"type": "json_object", "schema": schema},
         }
         reply = self._json("/v1/chat/completions", payload, timeout=self.config.request_timeout_s)
         choices = reply.get("choices")
