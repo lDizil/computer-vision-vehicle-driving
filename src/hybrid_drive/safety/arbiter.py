@@ -8,6 +8,7 @@ from hybrid_drive.contracts.slow import RiskStatus, SlowRequest, SlowResult
 from hybrid_drive.contracts.trajectory import Trajectory
 
 from .fallback import BrakingConfig
+from .fallback_policy import FallbackModel, FallbackObservation
 from .kinematics import KinematicLimits
 from .selection import TrajectoryDecision, select_trajectory
 
@@ -58,17 +59,21 @@ class ArbitrationDecision:
 class SafetyArbiter:
     limits: KinematicLimits
     braking: BrakingConfig
+    fallback_model: FallbackModel = FallbackModel.LONGITUDINAL
 
     def __post_init__(self):
         if not isinstance(self.braking, BrakingConfig):
             raise ValueError("braking must be BrakingConfig")
         self.braking.validate_for(self.limits)
+        if not isinstance(self.fallback_model, FallbackModel):
+            raise ValueError("fallback_model must be FallbackModel")
 
     def decide(
         self, plan: CandidateSet, motion: EgoMotion, *,
         now_monotonic_s: float, now_sim_s: float,
         request: SlowRequest | None = None, result: SlowResult | None = None,
         received_at_monotonic_s: float | None = None,
+        fallback_observation: FallbackObservation | None = None,
     ) -> ArbitrationDecision:
         """Apply only a matching, still-applicable reply; never wait for the model.
 
@@ -90,7 +95,10 @@ class SafetyArbiter:
             received_at_monotonic_s = _monotonic_time(received_at_monotonic_s, "received_at_monotonic_s")
         slow = _assess_slow(plan, request, result, now_monotonic_s, now_sim_s, received_at_monotonic_s)
         vetoed = slow.applied_result.vetoed_candidate_ids if slow.used else ()
-        selection = select_trajectory(plan, motion, self.limits, self.braking, vetoed)
+        selection = select_trajectory(
+            plan, motion, self.limits, self.braking, vetoed,
+            fallback_model=self.fallback_model, fallback_observation=fallback_observation,
+        )
         return ArbitrationDecision(selection, slow, now_monotonic_s, now_sim_s)
 
 

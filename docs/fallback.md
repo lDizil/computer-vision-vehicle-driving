@@ -2,7 +2,7 @@
 
 `select_trajectory(plan, motion, limits, config, vetoed_candidate_ids)` проверяет все кандидаты и выбирает первый неотклонённый вариант, прошедший [кинематические проверки](kinematics.md). Порядок `CandidateSet` считается порядком предпочтения Fast. Сохраняем отчёт каждого кандидата, включая vetoed и невыбранные.
 
-Если подходящего кандидата нет, вызываем один и тот же `braking_fallback` независимо от причины: veto единственного кандидата, all-veto или кинематические нарушения. Никаких отдельных более выгодных fallback-политик для разных вариантов абляции не вводим.
+If no candidate is eligible, the selected fallback policy handles every cause consistently. The default remains longitudinal braking; the curved snapshot model requires explicit opt-in. Within one policy, all ablations retain the same model and limits.
 
 ## Границы API
 
@@ -65,3 +65,29 @@ t_up = b/J
 `now_sim_s` используем для применимости slow-ответа, не для сдвига точек траектории: caller передаёт актуальный Fast-план и согласованное движение на его `t_ref`. В offline NAVSIM это время текущего кадра; rebasing и управление с непрерывно идущими часами здесь не реализованы.
 
 Политика проверяет только заявленные ограничения. Дорога, препятствия, yaw/кривизна, real-time и управление CARLA — отдельные слои. `FALLBACK` не означает доказанную дорожную безопасность. Подключение моделей/evaluator-агента относится к MV-122.
+
+## Opt-in curved snapshot model
+
+`SafetyArbiter(limits, braking, FallbackModel.CURVED)` accepts a fresh
+`fallback_observation` on each call. `FallbackObservation` binds the associated
+heading rate to `snapshot_id`, `t_ref_s`, the complete `EgoMotion` and a source
+ID. A different snapshot/time/motion gives `OBSERVATION_MISMATCH`; a missing
+rate gives `MISSING_HEADING_RATE`. An eligible Fast candidate does not need
+unused fallback inputs.
+
+The [planar hypothesis](planar-motion-model.md) preserves both initial velocity
+and acceleration components, with independent path and body-heading curvature.
+The scalar stopping kernel is shared with the legacy generator. A predeclared
+finite search uses budgets `1, 1/2, ..., 2^-12`, testing each independently
+against continuous full-vector acceleration/jerk bounds and the original
+`BrakingConfig` and `KinematicLimits`. Limits are not relaxed or reinterpreted
+as tangential-only caps.
+
+Admission additionally checks the complete unwrapped sideslip range until the
+full stop, unambiguous heading increments and sampled kinematics. No certified
+candidate gives `NO_CERTIFIED_PROFILE`, not proof of global infeasibility.
+`model_report` retains attempted budgets, selected scale, continuous bounds
+and model assumptions. `FallbackResult` retains full stopping time/path even
+beyond the output horizon.
+These conditional point-mass references do not certify tyres, steering,
+actuators, obstacle clearance or driving safety.

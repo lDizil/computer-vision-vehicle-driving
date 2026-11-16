@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 from numbers import Integral
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -9,8 +10,12 @@ from hybrid_drive.contracts._validation import finite_real
 from hybrid_drive.contracts.motion import EgoMotion
 from hybrid_drive.contracts.trajectory import Trajectory
 
+from ._braking_profile import build_profile, sample_distances
 from ._limits import exceeds_limit
 from .kinematics import KinematicLimits, KinematicReport, check_kinematics
+
+if TYPE_CHECKING:
+    from .curved_braking import CurvedBrakingReport
 
 
 @dataclass(frozen=True)
@@ -34,6 +39,7 @@ class BrakingConfig:
 
 class FallbackKind(str, Enum):
     BRAKING = "braking"
+    CURVED_BRAKING = "curved_braking"
     EMERGENCY_HOLD = "emergency_hold"
 
 
@@ -43,6 +49,10 @@ class FallbackFailure(str, Enum):
     INFEASIBLE_STOP = "infeasible_stop"
     NUMERIC_RANGE = "numeric_range"
     KINEMATIC_LIMITS = "kinematic_limits"
+    MISSING_HEADING_RATE = "missing_heading_rate"
+    UNSUPPORTED_HEADING = "unsupported_heading"
+    OBSERVATION_MISMATCH = "observation_mismatch"
+    NO_CERTIFIED_PROFILE = "no_certified_profile"
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,7 @@ class FallbackResult:
     stop_time_s: float | None
     stop_distance_m: float | None
     peak_speed_mps: float | None
+    model_report: "CurvedBrakingReport | None" = None
 
     @property
     def succeeded(self) -> bool:
@@ -86,8 +97,9 @@ def braking_fallback(motion: EgoMotion, limits: KinematicLimits, config: Braking
                 raise FloatingPointError("Unrepresentable stopping state")
             if a < 0 and v < minimum_speed:
                 return _emergency_hold(empty, motion, limits, FallbackFailure.INFEASIBLE_STOP)
-            profile = _build_profile(v, a, config, minimum_speed)
-            poses = _sample_profile(profile, v, a, jerk, empty.times_s)
+            profile = build_profile(v, a, config.deceleration_mps2, jerk, minimum_speed)
+            poses = np.zeros((len(empty.times_s), 3))
+            poses[:, 0] = sample_distances(profile, v, a, jerk, empty.times_s)
             if not np.isfinite(poses).all() or np.any(np.diff(np.r_[0.0, poses[:, 0]]) < 0):
                 raise FloatingPointError("Unrepresentable forward trajectory")
     except (FloatingPointError, OverflowError):
@@ -101,6 +113,17 @@ def braking_fallback(motion: EgoMotion, limits: KinematicLimits, config: Braking
         trajectory, FallbackKind.BRAKING, failure, report,
         profile.stop_time_s, profile.stop_distance_m, profile.peak_speed_mps,
     )
+
+
+def unproven_fallback(
+    motion: EgoMotion, limits: KinematicLimits, num_poses: int, reason: FallbackFailure,
+) -> FallbackResult:
+    """Finite offline placeholder with explicit failure, never a braking command."""
+    if not isinstance(motion, EgoMotion) or not isinstance(limits, KinematicLimits):
+        raise ValueError("Expected EgoMotion and KinematicLimits")
+    if not isinstance(reason, FallbackFailure):
+        raise ValueError("reason must be FallbackFailure")
+    return _emergency_hold(_empty_trajectory(num_poses, limits.interval_s), motion, limits, reason)
 
 
 def _empty_trajectory(num_poses: int, interval_s: float) -> Trajectory:
@@ -120,70 +143,3 @@ def _emergency_hold(trajectory, motion, limits, reason) -> FallbackResult:
         trajectory, FallbackKind.EMERGENCY_HOLD, reason,
         check_kinematics(trajectory, motion, limits), None, None, None,
     )
-
-
-@dataclass(frozen=True)
-class _Profile:
-    down_s: float
-    hold_s: float
-    up_s: float
-    down_distance_m: float
-    stop_distance_m: float
-    plateau_start_speed_mps: float
-    peak_deceleration_mps2: float
-    peak_speed_mps: float
-
-    @property
-    def stop_time_s(self) -> float:
-        return self.down_s + self.hold_s + self.up_s
-
-
-def _build_profile(v: float, a: float, config: BrakingConfig, minimum_speed: float) -> _Profile:
-    cap, jerk = config.deceleration_mps2, config.jerk_mps3
-    equivalent_speed = v + minimum_speed
-    saturation_speed = cap * (cap / jerk)
-    if equivalent_speed >= saturation_speed:
-        peak = cap
-        hold = (equivalent_speed - saturation_speed) / peak
-        down = (a + peak) / jerk
-    else:
-        peak = -a if a < 0 and v == minimum_speed else math.sqrt(jerk) * math.sqrt(equivalent_speed)
-        hold = 0.0
-        down = (v - minimum_speed) / (peak - a) if a < 0 else (a + peak) / jerk
-    if not math.isfinite(peak) or peak <= 0:
-        raise FloatingPointError("Unrepresentable braking peak")
-    up = peak / jerk
-    release_speed = peak * up / 2
-    plateau_speed = release_speed + peak * hold
-    down_distance = down * (plateau_speed + down * (peak / 3 - a / 6))
-    release_distance = release_speed * up / 3
-    stop_distance = down_distance + hold * (release_speed + peak * hold / 2) + release_distance
-    peak_speed = v + minimum_speed if a > 0 else v
-    values = (equivalent_speed, down, hold, up, release_speed, plateau_speed, down_distance, stop_distance, peak_speed)
-    if not all(math.isfinite(value) and value >= 0 for value in values):
-        raise FloatingPointError("Unrepresentable stopping profile")
-    release_start = down + hold
-    stop_time = release_start + up
-    if up <= 0 or not math.isfinite(stop_time) or stop_time <= release_start or stop_distance <= 0:
-        raise FloatingPointError("Unrepresentable stopping endpoint")
-    if hold > 0 and release_start <= down:
-        raise FloatingPointError("Unrepresentable plateau duration")
-    return _Profile(down, hold, up, down_distance, stop_distance, plateau_speed, peak, peak_speed)
-
-
-def _sample_profile(profile: _Profile, v: float, a: float, jerk: float, times) -> np.ndarray:
-    poses = np.zeros((len(times), 3))
-    poses[:, 0] = profile.stop_distance_m
-    down = times < profile.down_s
-    t = times[down]
-    poses[down, 0] = (v + (a / 2 - jerk * t / 6) * t) * t
-    release_start = profile.down_s + profile.hold_s
-    hold = (times >= profile.down_s) & (times < release_start)
-    t = times[hold] - profile.down_s
-    poses[hold, 0] = profile.down_distance_m + (profile.plateau_start_speed_mps - profile.peak_deceleration_mps2 * t / 2) * t
-    up = (times >= release_start) & (times < profile.stop_time_s)
-    ratio = (profile.stop_time_s - times[up]) / profile.up_s
-    release_distance = profile.peak_deceleration_mps2 * profile.up_s / 2 * profile.up_s / 3
-    # Evaluate backward from rest, rather than clipping a rounded negative velocity.
-    poses[up, 0] = profile.stop_distance_m - release_distance * ratio**3
-    return poses
