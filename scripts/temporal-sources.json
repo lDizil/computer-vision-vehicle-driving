@@ -1,0 +1,793 @@
+{
+  "schema": "hybrid-drive-temporal-sources-v1",
+  "navsim_revision": "3e8291bfa89ff247231e0227778840cd0a036896",
+  "nuplan_revision": "ce3c323af01c0d7ec5672f7832ef53f9c679aab0",
+  "log": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "archive_size_bytes": 534344190,
+    "archive_sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be",
+    "prefix_size_bytes": 2097152,
+    "prefix_sha256": "ebd39e42489626866205ab81fad029c67c99ec359f128a89de9b66c38e5b9cfe",
+    "member": "openscene-v1.1/meta_datas/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+    "path": "navsim_logs/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+    "size_bytes": 4832776,
+    "sha256": "d2a9b373da30670aaf327c2ab4ccc332e2b441be6cd5e3f72d77debd3adbcff3"
+  },
+  "camera_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_16.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "size_bytes": 2903678609,
+    "sha256": "09fc68bca920dced27bf513eb9867f08f5f7d34e73733c99e9aaa31471bebc50",
+    "etag": "9f6293b69d2202e9df798e6ebf3fabdb144faa3ba540c4bc72b72f95ffae24dc",
+    "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+  },
+  "selection": {
+    "rule": "earliest-twenty-full-windows-v1",
+    "num_source_frames": 738,
+    "num_history_frames": 4,
+    "num_future_frames": 10,
+    "selected_indices": [
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+    ],
+    "timestamp_step_us": [
+      499000,
+      501000
+    ],
+    "identity_window": [
+      {
+        "source_list_index": 24,
+        "token": "977a4b19b2f656aa",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 0,
+        "timestamp": 1633542883299653
+      },
+      {
+        "source_list_index": 25,
+        "token": "5e23a17a15605b8d",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 1,
+        "timestamp": 1633542883799490
+      },
+      {
+        "source_list_index": 26,
+        "token": "6df92a27f4365b6d",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 2,
+        "timestamp": 1633542884299538
+      },
+      {
+        "source_list_index": 27,
+        "token": "074f41574b735fb6",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 3,
+        "timestamp": 1633542884799752
+      },
+      {
+        "source_list_index": 28,
+        "token": "a1b00815350a5189",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 4,
+        "timestamp": 1633542885299635
+      },
+      {
+        "source_list_index": 29,
+        "token": "a46d07e1d5175077",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 5,
+        "timestamp": 1633542885799507
+      },
+      {
+        "source_list_index": 30,
+        "token": "b30e5107235f5863",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 6,
+        "timestamp": 1633542886299519
+      },
+      {
+        "source_list_index": 31,
+        "token": "76a4d43d597a584c",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 7,
+        "timestamp": 1633542886799696
+      },
+      {
+        "source_list_index": 32,
+        "token": "4fbd762554895644",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 8,
+        "timestamp": 1633542887299741
+      },
+      {
+        "source_list_index": 33,
+        "token": "392c0c1cf34c54a3",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 9,
+        "timestamp": 1633542887799402
+      },
+      {
+        "source_list_index": 34,
+        "token": "4fc078bf361d5928",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 10,
+        "timestamp": 1633542888299511
+      },
+      {
+        "source_list_index": 35,
+        "token": "6cb785f0fb745b7f",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 11,
+        "timestamp": 1633542888799772
+      },
+      {
+        "source_list_index": 36,
+        "token": "80ed1a6359a95646",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 12,
+        "timestamp": 1633542889299624
+      },
+      {
+        "source_list_index": 37,
+        "token": "0822ae871f635f3d",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 13,
+        "timestamp": 1633542889799395
+      },
+      {
+        "source_list_index": 38,
+        "token": "8264a346f3fa589c",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 14,
+        "timestamp": 1633542890299604
+      },
+      {
+        "source_list_index": 39,
+        "token": "7cdfe62daebf5467",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 15,
+        "timestamp": 1633542890799690
+      },
+      {
+        "source_list_index": 40,
+        "token": "b5b3cf68e2775247",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 16,
+        "timestamp": 1633542891299454
+      },
+      {
+        "source_list_index": 41,
+        "token": "f672a791cccd547b",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 17,
+        "timestamp": 1633542891799512
+      },
+      {
+        "source_list_index": 42,
+        "token": "9c291397ccce5d33",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 18,
+        "timestamp": 1633542892299772
+      },
+      {
+        "source_list_index": 43,
+        "token": "d3d9bc9984a552c2",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 19,
+        "timestamp": 1633542892799644
+      },
+      {
+        "source_list_index": 44,
+        "token": "99bceb39e0d05e73",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 20,
+        "timestamp": 1633542893299388
+      },
+      {
+        "source_list_index": 45,
+        "token": "521b0c9595a65dd5",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 21,
+        "timestamp": 1633542893799552
+      },
+      {
+        "source_list_index": 46,
+        "token": "8870defb9cea520b",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 22,
+        "timestamp": 1633542894299818
+      },
+      {
+        "source_list_index": 47,
+        "token": "ffdf7484ea8d5aff",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 23,
+        "timestamp": 1633542894799546
+      },
+      {
+        "source_list_index": 48,
+        "token": "412d450881105087",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 24,
+        "timestamp": 1633542895299456
+      },
+      {
+        "source_list_index": 49,
+        "token": "3cbdb78fb2ef5e15",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 25,
+        "timestamp": 1633542895799699
+      },
+      {
+        "source_list_index": 50,
+        "token": "aa3e8ff209c45c44",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 26,
+        "timestamp": 1633542896299771
+      },
+      {
+        "source_list_index": 51,
+        "token": "b98ffb537bdf57dd",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 27,
+        "timestamp": 1633542896799499
+      },
+      {
+        "source_list_index": 52,
+        "token": "7d5d9d01f4de519a",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 28,
+        "timestamp": 1633542897299454
+      },
+      {
+        "source_list_index": 53,
+        "token": "ad25d75009125a6a",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 29,
+        "timestamp": 1633542897799700
+      },
+      {
+        "source_list_index": 54,
+        "token": "5beba7ecc63d5cd9",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 30,
+        "timestamp": 1633542898299700
+      },
+      {
+        "source_list_index": 55,
+        "token": "deb9118e543f53fb",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 31,
+        "timestamp": 1633542898799452
+      },
+      {
+        "source_list_index": 56,
+        "token": "63c81c0e8cdc574d",
+        "scene_token": "ed69ac8f92945572",
+        "frame_idx": 32,
+        "timestamp": 1633542899299627
+      }
+    ],
+    "frozen_before_inference": true
+  },
+  "cases": [
+    {
+      "case_id": "t00",
+      "source_list_index": 27,
+      "metadata_frame_idx": 3,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "074f41574b735fb6",
+      "frame_timestamp_us": 1633542884799752,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/bf7268c3551e5e08.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/bf7268c3551e5e08.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/cd354b52c23154c9.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/cd354b52c23154c9.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/17c985c50a205ff0.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/17c985c50a205ff0.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t01",
+      "source_list_index": 28,
+      "metadata_frame_idx": 4,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "a1b00815350a5189",
+      "frame_timestamp_us": 1633542885299635,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8ec86f4641365085.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8ec86f4641365085.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/bb274d9d4bdb51ed.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/bb274d9d4bdb51ed.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/20cdbab05f375332.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/20cdbab05f375332.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t02",
+      "source_list_index": 29,
+      "metadata_frame_idx": 5,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "a46d07e1d5175077",
+      "frame_timestamp_us": 1633542885799507,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/3c6d4a351ca5572d.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/3c6d4a351ca5572d.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/f59d21e274e0547a.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/f59d21e274e0547a.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/3bb5ebbcc01e55f1.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/3bb5ebbcc01e55f1.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t03",
+      "source_list_index": 30,
+      "metadata_frame_idx": 6,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "b30e5107235f5863",
+      "frame_timestamp_us": 1633542886299519,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/018ca69d020c5aa7.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/018ca69d020c5aa7.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/77ae04b1b16c512b.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/77ae04b1b16c512b.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/8dfbb27104a05537.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/8dfbb27104a05537.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t04",
+      "source_list_index": 31,
+      "metadata_frame_idx": 7,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "76a4d43d597a584c",
+      "frame_timestamp_us": 1633542886799696,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/68bb867eb870566d.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/68bb867eb870566d.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/15e5345a9da95045.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/15e5345a9da95045.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/347a3869531952cf.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/347a3869531952cf.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t05",
+      "source_list_index": 32,
+      "metadata_frame_idx": 8,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "4fbd762554895644",
+      "frame_timestamp_us": 1633542887299741,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/d8f956b77d3a5c9e.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/d8f956b77d3a5c9e.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/86ac177896c452bd.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/86ac177896c452bd.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/98b82b8994e35241.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/98b82b8994e35241.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t06",
+      "source_list_index": 33,
+      "metadata_frame_idx": 9,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "392c0c1cf34c54a3",
+      "frame_timestamp_us": 1633542887799402,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/b07b829108bc5be1.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/b07b829108bc5be1.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/e87cba82844c5b52.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/e87cba82844c5b52.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/74152919200d53b5.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/74152919200d53b5.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t07",
+      "source_list_index": 34,
+      "metadata_frame_idx": 10,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "4fc078bf361d5928",
+      "frame_timestamp_us": 1633542888299511,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/2c10c424c56f501b.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/2c10c424c56f501b.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/424699036ae25251.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/424699036ae25251.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/6deaa047def7596a.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/6deaa047def7596a.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t08",
+      "source_list_index": 35,
+      "metadata_frame_idx": 11,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "6cb785f0fb745b7f",
+      "frame_timestamp_us": 1633542888799772,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/de9eac1c44a55515.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/de9eac1c44a55515.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/4e9998793ce05fc5.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/4e9998793ce05fc5.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/471383023faf5c72.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/471383023faf5c72.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t09",
+      "source_list_index": 36,
+      "metadata_frame_idx": 12,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "80ed1a6359a95646",
+      "frame_timestamp_us": 1633542889299624,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/cbc8639c5f165eb8.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/cbc8639c5f165eb8.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/1e9dd809033a54d5.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/1e9dd809033a54d5.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/7f43186c1bf154ba.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/7f43186c1bf154ba.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t10",
+      "source_list_index": 37,
+      "metadata_frame_idx": 13,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "0822ae871f635f3d",
+      "frame_timestamp_us": 1633542889799395,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/ec3da3a420f952f7.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/ec3da3a420f952f7.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/32430f91d88353f0.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/32430f91d88353f0.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/e102f365a3d15c7f.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/e102f365a3d15c7f.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t11",
+      "source_list_index": 38,
+      "metadata_frame_idx": 14,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "8264a346f3fa589c",
+      "frame_timestamp_us": 1633542890299604,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/e027b8c7a6585a40.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/e027b8c7a6585a40.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/4e418695e7b357a3.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/4e418695e7b357a3.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/4eb23a2954bb5a91.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/4eb23a2954bb5a91.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t12",
+      "source_list_index": 39,
+      "metadata_frame_idx": 15,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "7cdfe62daebf5467",
+      "frame_timestamp_us": 1633542890799690,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/0911a0eb7c0454a1.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/0911a0eb7c0454a1.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/3aab2619e542500e.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/3aab2619e542500e.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/fc20017f91165ef9.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/fc20017f91165ef9.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t13",
+      "source_list_index": 40,
+      "metadata_frame_idx": 16,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "b5b3cf68e2775247",
+      "frame_timestamp_us": 1633542891299454,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/b351dd194e665fff.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/b351dd194e665fff.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/ee68f17b26d757c5.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/ee68f17b26d757c5.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/782f6f09d3ba5a85.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/782f6f09d3ba5a85.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t14",
+      "source_list_index": 41,
+      "metadata_frame_idx": 17,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "f672a791cccd547b",
+      "frame_timestamp_us": 1633542891799512,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/03150a4b4eea5113.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/03150a4b4eea5113.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/83ca02cb0d885c87.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/83ca02cb0d885c87.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/924c6960e303581a.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/924c6960e303581a.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t15",
+      "source_list_index": 42,
+      "metadata_frame_idx": 18,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "9c291397ccce5d33",
+      "frame_timestamp_us": 1633542892299772,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8bcdfc6526e25345.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8bcdfc6526e25345.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/adf417b27ce156a9.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/adf417b27ce156a9.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/a596561ed6fd5cc7.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/a596561ed6fd5cc7.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t16",
+      "source_list_index": 43,
+      "metadata_frame_idx": 19,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "d3d9bc9984a552c2",
+      "frame_timestamp_us": 1633542892799644,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/baacf3915f8d590f.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/baacf3915f8d590f.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/d21e56109ea651d0.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/d21e56109ea651d0.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/aaf461d2e31758d1.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/aaf461d2e31758d1.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t17",
+      "source_list_index": 44,
+      "metadata_frame_idx": 20,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "99bceb39e0d05e73",
+      "frame_timestamp_us": 1633542893299388,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8e79f5831b31550a.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/8e79f5831b31550a.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/aef058a1db42570c.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/aef058a1db42570c.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/d78a9297c3ca5bd4.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/d78a9297c3ca5bd4.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t18",
+      "source_list_index": 45,
+      "metadata_frame_idx": 21,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "521b0c9595a65dd5",
+      "frame_timestamp_us": 1633542893799552,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/317ee5581ce358c8.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/317ee5581ce358c8.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/b934b78922db5748.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/b934b78922db5748.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/f75e95f95ad1571f.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/f75e95f95ad1571f.jpg"
+        }
+      ]
+    },
+    {
+      "case_id": "t19",
+      "source_list_index": 46,
+      "metadata_frame_idx": 22,
+      "metadata_scene_token": "ed69ac8f92945572",
+      "scene_token": "8870defb9cea520b",
+      "frame_timestamp_us": 1633542894299818,
+      "cameras": [
+        {
+          "camera": "CAM_L0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/ca0ee440dbf85064.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/ca0ee440dbf85064.jpg"
+        },
+        {
+          "camera": "CAM_F0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/d4dc9e09fcfc5603.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/d4dc9e09fcfc5603.jpg"
+        },
+        {
+          "camera": "CAM_R0",
+          "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/81081a6adc1f5048.jpg",
+          "path": "sensor_blobs/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/81081a6adc1f5048.jpg"
+        }
+      ]
+    }
+  ]
+}
