@@ -123,6 +123,7 @@ def test_unconfirmed_cleanup_stops_series_before_next_model(bundle, tmp_path, mo
     def completed(worker, context):
         raw = FixtureBackend("clear").generate(context)
         return SimpleNamespace(outcome="completed", raw_response=raw,
+                               received_at_monotonic_s=context.request.submitted_at_monotonic_s,
                                result=worker.factory.parse_output(raw, context))
 
     monkeypatch.setattr(real_replay, "AsyncSlowWorker", UnconfirmedWorker)

@@ -22,14 +22,18 @@ from .real_bundle import RealSceneBundle
 from .real_report import write_real_report
 
 
-def context_for_bundle(bundle, model_version, *, request_id, started, deadline_s):
+def plan_for_bundle(bundle):
     if not isinstance(bundle, RealSceneBundle):
         raise ValueError("bundle must be RealSceneBundle")
     # Coordinates remain local rear-axle SE2; no world reference pose is invented.
-    plan = CandidateSet(
+    return CandidateSet(
         "ltf-" + bundle.provenance["raw_candidate_hash"], "bundle-" + bundle.bundle_hash,
         bundle.frame_timestamp_us / 1e6, Pose2D(0, 0, 0), (Candidate("ltf-0", bundle.trajectory),),
     )
+
+
+def context_for_bundle(bundle, model_version, *, request_id, started, deadline_s):
+    plan = plan_for_bundle(bundle)
     request = SlowRequest(request_id, plan, started, started + deadline_s,
                           plan.t_ref_s + bundle.trajectory.horizon_s, model_version)
     frames = tuple(render_plan_overlay(view, bundle.trajectory) for view in bundle.views)
@@ -97,6 +101,7 @@ def _attempt(bundle, factory, run_dir, deadline_s):
     row = {
         "seed": factory.seed, "outcome": "backend_error", "status": None, "vetoed_candidate_ids": [],
         "raw_response": None, "explanation": None, "context_hash": context.content_hash,
+        "received_at_monotonic_s": None, "decision_checkpoint_monotonic_s": None,
         "request_id": context.request.request_id, "candidates_hash": context.request.plan.candidates_hash,
         "submitted_at_monotonic_s": started, "deadline_monotonic_s": started + deadline_s,
         "prompt_sha256": hashlib.sha256(program.encode()).hexdigest(), "declared_prompt_stages": len(prompts),
@@ -107,10 +112,12 @@ def _attempt(bundle, factory, run_dir, deadline_s):
         worker = AsyncSlowWorker(factory, factory.model_version, response_parser=factory.parse_output)
         worker.submit(context)
         event = wait_for_completion(worker, context)
+        row["decision_checkpoint_monotonic_s"] = time.monotonic()
         if event is None:
             row["outcome"] = "process_exit"
         else:
-            row.update(outcome=event.outcome, raw_response=event.raw_response)
+            row.update(outcome=event.outcome, raw_response=event.raw_response,
+                       received_at_monotonic_s=event.received_at_monotonic_s)
             if event.result is not None:
                 event.result.validate_for(context.request)
                 row.update(status=event.result.status.value,
@@ -121,7 +128,10 @@ def _attempt(bundle, factory, run_dir, deadline_s):
                    error_type=type(exc).__name__)
     finally:
         # An unconfirmed process group must never overlap another model attempt.
-        row["latency_s"] = time.monotonic() - started
+        checkpoint = time.monotonic()
+        if row["decision_checkpoint_monotonic_s"] is None:
+            row["decision_checkpoint_monotonic_s"] = checkpoint
+        row["latency_s"] = checkpoint - started
         row["cleanup_confirmed"] = worker is None
         if worker is not None:
             try:
