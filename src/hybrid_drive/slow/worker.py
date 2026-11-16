@@ -119,6 +119,17 @@ class AsyncSlowWorker:
         self._pending = context
         return disposition
 
+    def discard_pending(self, request_id: str) -> bool:
+        """Remove only this pending association, without servicing or dispatching work."""
+        if self.closed:
+            raise RuntimeError("Worker is closed")
+        identifier(request_id, "request_id")
+        if self._pending is None or self.pending_request_id != request_id:
+            return False
+        context, self._pending = self._pending, None
+        self._emit(context, None, self.now_monotonic_s(), "discarded_pending")
+        return True
+
     def poll(self) -> tuple[SlowCompletion, ...]:
         if not self.closed:
             self._service(self.now_monotonic_s())
