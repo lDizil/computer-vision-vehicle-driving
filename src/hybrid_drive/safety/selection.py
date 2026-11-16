@@ -7,7 +7,8 @@ from hybrid_drive.contracts.planning import CandidateSet
 from hybrid_drive.contracts.trajectory import Trajectory
 
 from ._limits import same_interval
-from .fallback import BrakingConfig, FallbackResult, braking_fallback
+from .fallback import BrakingConfig, FallbackResult
+from .fallback_policy import FallbackModel, FallbackObservation, plan_fallback
 from .kinematics import KinematicLimits, KinematicReport, check_kinematics
 
 
@@ -40,7 +41,8 @@ class TrajectoryDecision:
 
 def select_trajectory(
     plan: CandidateSet, motion: EgoMotion, limits: KinematicLimits, config: BrakingConfig,
-    vetoed_candidate_ids=(),
+    vetoed_candidate_ids=(), *, fallback_model: FallbackModel = FallbackModel.LONGITUDINAL,
+    fallback_observation: FallbackObservation | None = None,
 ) -> TrajectoryDecision:
     """Resolve already-authorized veto IDs; freshness and model parsing live upstream.
 
@@ -52,6 +54,10 @@ def select_trajectory(
     if not isinstance(config, BrakingConfig):
         raise ValueError("config must be BrakingConfig")
     config.validate_for(limits)
+    if not isinstance(fallback_model, FallbackModel):
+        raise ValueError("fallback_model must be FallbackModel")
+    if fallback_observation is not None and not isinstance(fallback_observation, FallbackObservation):
+        raise ValueError("fallback_observation must be FallbackObservation or None")
     sampling = plan.candidates[0].trajectory
     if not same_interval(sampling.interval_s, limits.interval_s):
         raise ValueError("Plan sampling differs from the configured limits")
@@ -69,6 +75,6 @@ def select_trajectory(
         if not assessment.vetoed and assessment.report.within_limits:
             return TrajectoryDecision(DecisionStatus.CANDIDATE, candidate.trajectory, candidate.candidate_id, assessments, None, plan)
     fallback_limits = replace(limits, interval_s=sampling.interval_s)
-    fallback = braking_fallback(motion, fallback_limits, config, sampling.num_poses)
+    fallback = plan_fallback(fallback_model, plan, motion, fallback_limits, config, fallback_observation)
     status = DecisionStatus.FALLBACK if fallback.succeeded else DecisionStatus.FAILURE
     return TrajectoryDecision(status, fallback.trajectory, None, assessments, fallback, plan)
