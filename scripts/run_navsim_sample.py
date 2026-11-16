@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-from dataclasses import asdict
 import json
 import math
 from pathlib import Path
@@ -12,6 +11,8 @@ import sys
 import time
 import traceback
 
+
+from hybrid_drive.experiments.navsim import score_hybrid_prediction
 
 def run_sample(data_root, output_root, token=None, agent="cv"):
     if agent not in ("cv", "hybrid"):
@@ -177,25 +178,6 @@ def kinematic_evidence(report):
         "max_speed_mps": report.max_speed_mps, "max_acceleration_mps2": report.max_acceleration_mps2,
         "max_jerk_mps3": report.max_jerk_mps3,
     }
-
-
-def score_hybrid_prediction(prediction, token, cache_dir, overrides):
-    from hydra import compose, initialize_config_module
-    from hydra.utils import instantiate
-    from navsim.common.dataloader import MetricCacheLoader
-    from navsim.evaluate.pdm_score import pdm_score
-
-    with initialize_config_module(config_module="navsim.planning.script.config.pdm_scoring", version_base=None):
-        cfg = compose(config_name="default_run_pdm_score", overrides=overrides)
-    simulator = instantiate(cfg.simulator)
-    scorer = instantiate(cfg.scorer)
-    if simulator.proposal_sampling != scorer.proposal_sampling:
-        raise ValueError("Simulator and scorer proposal sampling differ")
-    cache = MetricCacheLoader(cache_dir).get_from_token(token)
-    return asdict(pdm_score(
-        metric_cache=cache, model_trajectory=prediction, future_sampling=simulator.proposal_sampling,
-        simulator=simulator, scorer=scorer,
-    ))
 
 
 def write_score_rows(path, token, metrics):
