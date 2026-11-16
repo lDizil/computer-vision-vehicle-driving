@@ -11,7 +11,8 @@ import resource
 import time
 from uuid import uuid4
 
-from hybrid_drive.slow.worker import AsyncSlowWorker
+from hybrid_drive.slow.worker import AsyncSlowWorker, wait_for_completion
+from hybrid_drive.experiments.io import write_json
 from hybrid_drive.slow.protocol import bounded_prompt
 from .metrics import summarize
 from .prompt import PROMPT_VERSION
@@ -150,17 +151,6 @@ def _require_decision_first(raw, expected=("status", "vetoed_candidate_ids", "ex
         raise DecisionOrderError("Completed response violated decision-first JSON key order")
 
 
-def wait_for_completion(worker, context):
-    while True:
-        for completion in worker.poll():
-            if (completion.context.request.request_id == context.request.request_id
-                    and completion.context.content_hash == context.content_hash):
-                return completion
-        if worker.queue_depth == 0:
-            return None
-        time.sleep(0.005)
-
-
 def _factory_metadata(factory):
     return {
         "model_version": factory.model_version, "sources": factory.sources,
@@ -184,10 +174,3 @@ def _execution_profile(factory):
             "context_size": factory.context_size, "image_min_tokens": factory.image_min_tokens,
             "image_max_tokens": factory.image_max_tokens, "cache_prompt": factory.cache_prompt,
             "response_protocol": factory.protocol_name}
-
-
-def write_json(path, value):
-    path = Path(path)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
-    temporary.replace(path)

@@ -420,3 +420,14 @@ def _bounded_output_bytes(raw):
     except UnicodeError:
         return None
     return output if len(output) <= _OUTPUT_LIMIT else None
+
+
+def wait_for_completion(worker, context):
+    while True:
+        for completion in worker.poll():
+            if (completion.context.request.request_id == context.request.request_id
+                    and completion.context.content_hash == context.content_hash):
+                return completion
+        if worker.queue_depth == 0:
+            return None
+        time.sleep(0.005)

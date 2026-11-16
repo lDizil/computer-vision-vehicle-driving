@@ -82,6 +82,20 @@ jobs:
             --data-root /data --asset-root /assets --output-root /results \
             --revision "$SOURCE_REVISION" --seed 0 \
             2>&1 | tee "$RUNNER_TEMP/neural-results/neural-evaluation.log"
+      - name: Export and verify the current real frame without future labels
+        run: |
+          source_run="$(python3 -c 'from pathlib import Path; import sys; runs=list(Path(sys.argv[1]).glob("*/experiment-manifest.json")); assert len(runs)==1, runs; print(runs[0].parent.name)' "$RUNNER_TEMP/neural-results")"
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/navsim-data:/data:ro" \
+            --volume "$RUNNER_TEMP/ltf-assets:/assets:ro" \
+            --volume "$RUNNER_TEMP/neural-results:/results" \
+            hybrid-drive:neural python -m scripts.export_real_bundle \
+            --data-root /data --asset-root /assets --source-run "/results/$source_run" \
+            --output /results/current-frame-bundle
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/neural-results:/results:ro" \
+            hybrid-drive:neural python -c 'from hybrid_drive.experiments.real_bundle import load_real_bundle; b=load_real_bundle("/results/current-frame-bundle"); print("Verified real bundle:", b.bundle_hash)'
       - name: Save reports and verified manifests only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -92,7 +106,7 @@ jobs:
           path: |
             ${{ runner.temp }}/neural-results/**/*.json
             ${{ runner.temp }}/neural-results/**/*.csv
-            ${{ runner.temp }}/neural-results/**/*.png
+            ${{ runner.temp }}/neural-results/**/trajectory.png
             ${{ runner.temp }}/neural-results/**/*.log
             ${{ runner.temp }}/navsim-data/sample-manifest.json
             ${{ runner.temp }}/ltf-assets/ltf-manifest.json
