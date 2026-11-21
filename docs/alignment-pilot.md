@@ -87,3 +87,38 @@ retains differentiation through the supplied prefix. We use existing single
 token IDs for ` LOC` and ` MOT` aliases with no vocabulary change. For this pilot
 a fixed prompt ends in consumed ` LOC`; its hidden state is the one eligible
 event. The not-yet-consumed yes/no answer is a target, never a prompt input.
+
+## Paired optimization and reporting
+
+Only the prior tokenizer, query projector and instructed decoder update.
+Four fixed 2 x 2 image-grid priors carry normalized image-center coordinates
+and sizes, not target boxes or pseudo-3D detections. This input is identical
+for every frame. Targets supervise a LOC presence bit and a projected 2D/ego
+3D box for positives. The fixed prompt has a single consumed LOC event; the
+next-token yes/no label is never consumed. There is no MOT supervision.
+
+The zero-feature control uses the same initializer, train order, optimizer,
+step count, fixed priors, prompt and labels. Set all visual feature values to
+zero in both its training and evaluation, rather than blinding a model only
+at evaluation time. The data are split by drive before evaluation; evaluate
+holdout at initial and final weights, never select checkpoints or adjust the
+recipe using holdout results. Loss is aggregated using supervised counts per
+term. Box metrics use all positive labels irrespective of presence prediction.
+Use balanced accuracy and its class denominators; yes/no is a forced choice
+between token logits, not text generation quality.
+
+In the alignment image with verified `/data` and `/models` mounted read-only,
+and `--network none`:
+
+```sh
+python -m scripts.run_alignment_pilot   --data-root /data --model-root /models --output-root /results   --revision '<exact git commit SHA>' --epochs 2 --batch-size 4 --seed 0
+```
+
+The run saves counts, gradients, per-arm losses and metrics, progress traces,
+a standalone HTML report and separate weight-only safetensors. It checks
+that the two initial core states match, that CE alone reaches the trainable
+bridge, that both frozen backbones stay unchanged, and that the restored core
+exactly reproduces a held-out output in the same runtime. Failed runs retain
+a diagnostic and completed step records. Do not upload weights fitted on the
+restricted data. This is one bounded LOC alignment pilot, not either full
+training stage or a new default backend.
