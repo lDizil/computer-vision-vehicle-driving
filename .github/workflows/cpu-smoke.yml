@@ -29,6 +29,14 @@ jobs:
             hybrid-drive:cpu python -m scripts.run_slow_replay --output /results/slow-replay.json
       - name: Exercise real upstream without network or datasets
         run: docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none hybrid-drive:cpu
+      - name: Optimize the trainable reasoning core on a synthetic CPU fixture
+        run: |
+          mkdir -p "$RUNNER_TEMP/neural-core-results"
+          docker run --rm --init --cpus 1 --memory 2g --memory-swap 2g --network none \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/neural-core-results:/results" \
+            hybrid-drive:cpu python -m scripts.run_neural_core_smoke \
+            --output-root /results --revision "$GITHUB_SHA" --steps 12 --seed 0
       - name: Prepare the pinned real-data sample
         run: python3 scripts/prepare_navsim_sample.py --root "$RUNNER_TEMP/navsim-data" --rate-limit-mib 4
       - name: Evaluate one real ConstantVelocityAgent scene
@@ -61,3 +69,8 @@ jobs:
             ${{ runner.temp }}/navsim-results/**/*.csv
             ${{ runner.temp }}/navsim-results/**/trajectory.png
             ${{ runner.temp }}/navsim-data/sample-manifest.json
+            ${{ runner.temp }}/neural-core-results/**/manifest.json
+            ${{ runner.temp }}/neural-core-results/**/result.json
+            ${{ runner.temp }}/neural-core-results/**/steps.json
+            ${{ runner.temp }}/neural-core-results/**/report.html
+            ${{ runner.temp }}/neural-core-results/**/core.safetensors
