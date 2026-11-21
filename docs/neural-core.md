@@ -43,6 +43,20 @@ unknown values and remains zero at the output; empty N is valid and backward
 safe. Tensor references follow ordinary PyTorch mutability/autograd semantics,
 not the immutable NumPy inference-contract semantics.
 
+## VisionTransformer feature adapter
+
+`ViTPatchEncoder` reuses the public torchvision FX feature extractor on a
+supplied `VisionTransformer`. It exposes `encoder.ln` tokens, removes exactly
+one CLS token and restores a known patch grid from the encoder image/patch
+sizes. Input is `[B,V,3,S,S]`; output is `[B,V,hidden_dim,S/P,S/P]`.
+There is no sqrt-based grid inference or automatic image preprocessing.
+
+The wrapper shares the supplied encoder parameters and does not download,
+freeze, detach, resize, normalize or set inference mode. The caller owns those
+choices. Tests use an actual tiny torchvision ViT initialized from scratch,
+including ViT -> PriorTokenizer(768) backward. This verifies the integration
+boundary, not pretrained EVA-CLIP features, perception quality or alignment.
+
 ## Integration boundary
 
 No detector, encoder or 3D object producer is invented by this module. In
@@ -50,3 +64,42 @@ particular, FSDrive does not currently expose a verified object-query API.
 Supplying synthetic features verifies neural mathematics, not perception
 quality or shared-feature alignment. The existing LTF/Qwen/Safety path is not
 silently switched to newly initialized weights.
+
+## Query projection and instructed decoder
+
+`QFormerProjector(visual_dim, llm_dim, prior_dim=768, ...)` projects external
+visual tokens `[B,M,C]` and optional prior tokens `[B,N,768]` into fixed learned
+queries `[B,Q,H_llm]`. Boolean masks use True for valid tokens. We sanitize
+padding before projections/attention and require actual visual evidence in
+every batch row. Empty priors are valid; all-masked visual rows are not.
+
+This Q-former-like implementation uses `nn.TransformerDecoder`, learned query
+and visual/prior type embeddings. It does not load LAVIS/InstructBLIP weights.
+Query count/layers/width are explicit project configuration. Spatial/view
+position information must already be represented by the encoder's features.
+A compatible external LLM adapter owns prefix injection and tokenization.
+
+`InstructedVisionDecoder` receives visual memory, consumed token IDs, matching
+last-layer hidden states and an `answer_mask`. `<LOC>` / `<MOT>` IDs are supplied
+by that tokenizer adapter. We take `h_t` after consuming the special token, not
+`h_(t-1)` that predicted it. Prompt/padding occurrences are not answer events.
+Repeated events are retained in batch/token order and are never truncated.
+Each event is decoded independently: later generated events cannot influence
+an earlier prediction. Its LLM hidden state already contains causal context.
+
+`PerceptionOutput` is a flat event table:
+
+| Field | Shape / meaning |
+|---|---|
+| `batch_indices`, `token_positions` | `[E]` long, exact event identity |
+| `event_kinds` | `[E]` long, LOC=0 / MOT=1 |
+| `validity_logits` | `[E]`, raw classification logits |
+| `boxes_3d` | `[E,7]`, raw x/y/z/width/length/height/yaw regression, ego metres/radians |
+| `boxes_2d` | `[E,4]`, auxiliary normalized-image xyxy; positive extents, corners may be outside the image |
+| `motion_xy` | `[E,T,2]`, ego metres at dt through T*dt; default T=8, dt=0.5 s |
+
+The auxiliary 2D box is independently predicted, not a calibrated projection
+of the 3D box. It supports the project's 2D GIoU loss without pretending that
+axis-aligned 2D overlap measures oriented 3D overlap. Raw untrained box/motion
+outputs are not physically validated detections or driving trajectories.
+Empty E is backward-safe. Tensors keep ordinary PyTorch ownership semantics.
