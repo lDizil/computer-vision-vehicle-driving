@@ -67,8 +67,11 @@ def targets_path(split):
 
 
 def validate_jpeg_member(member, sources, split):
-    log = sources["logs"][split]["log_name"]
-    prefix = f"{sources['camera_archive']['archive_prefix']}/{log}/{CAMERA}/"
+    validate_recording_jpeg_member(member, sources["camera_archive"]["archive_prefix"], sources["logs"][split]["log_name"])
+
+
+def validate_recording_jpeg_member(member, archive_prefix, log_name):
+    prefix = f"{archive_prefix}/{log_name}/{CAMERA}/"
     if not isinstance(member, str) or not member.startswith(prefix) or not member.endswith(".jpg"):
         raise PreparationError("JPEG must identify the matching OpenScene log and CAM_F0")
     require_hex(member.removeprefix(prefix).removesuffix(".jpg"), 16, "JPEG token")
@@ -118,9 +121,16 @@ def read_alignment_manifest(root):
 
 
 def _validate_sample(item, sources, split, index, previous_timestamp):
+    _validate_recording_sample(
+        item, sources["camera_archive"]["archive_prefix"], sources["logs"][split]["log_name"],
+        sample_id(split, index), index, previous_timestamp,
+    )
+
+
+def _validate_recording_sample(item, archive_prefix, log_name, identity, index, previous_timestamp):
     require_keys(item, {"sample_id", "source_list_index", "frame_token", "scene_token", "frame_idx", "timestamp_us",
                         "jpeg", "rgb", "calibration_sha256"}, "alignment sample")
-    if (item["sample_id"] != sample_id(split, index) or type(item["source_list_index"]) is not int
+    if (item["sample_id"] != identity or type(item["source_list_index"]) is not int
             or item["source_list_index"] != index or type(item["frame_idx"]) is not int or item["frame_idx"] < 0
             or type(item["timestamp_us"]) is not int or not previous_timestamp < item["timestamp_us"] < 2**63):
         raise PreparationError("Alignment sample differs from its frozen frame order/identity")
@@ -130,7 +140,7 @@ def _validate_sample(item, sources, split, index, previous_timestamp):
 
     jpeg = item["jpeg"]
     require_keys(jpeg, {"member", "size_bytes", "sha256", "width", "height"}, "source JPEG")
-    validate_jpeg_member(jpeg["member"], sources, split)
+    validate_recording_jpeg_member(jpeg["member"], archive_prefix, log_name)
     require_hex(jpeg["sha256"], 64, "JPEG SHA256")
     if (type(jpeg["size_bytes"]) is not int or not 0 < jpeg["size_bytes"] <= MAX_MEMBER_BYTES
             or type(jpeg["width"]) is not int or type(jpeg["height"]) is not int

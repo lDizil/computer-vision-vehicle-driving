@@ -1,0 +1,189 @@
+{
+  "schema": "hybrid-drive-spatial-loc-sources-v1",
+  "dataset": "OpenScene v1.1 mini",
+  "openscene_revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+  "navsim_revision": "3e8291bfa89ff247231e0227778840cd0a036896",
+  "nuplan_revision": "ce3c323af01c0d7ec5672f7832ef53f9c679aab0",
+  "license": {
+    "name": "CC-BY-NC-SA-4.0 with Motional dataset terms",
+    "url": "https://motional-nuplan.s3-ap-northeast-1.amazonaws.com/LICENSE"
+  },
+  "publisher_mapping": {
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_0-31.json",
+    "raw_lfs_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/raw/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_0-31.json",
+    "size_bytes": 4088,
+    "sha256": "7c8a6cded3b688d252c070879afc008101c0f3e1576a3ad8de696748451c6075",
+    "cdn_etag": "eaf6240f688d19c38396b538c2f013838ec66730277939de7f8a2f9ee2c5a33a",
+    "introduced_revision": "11824f04bb3188c60655a529c7d23914b69cad0c",
+    "introduced_at_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/commit/11824f04bb3188c60655a529c7d23914b69cad0c",
+    "selected_entries": {
+      "openscene_sensor_mini_5": [
+        "2021.06.09.14.58.55_veh-35_01894_02311",
+        "2021.10.11.07.12.18_veh-50_00211_00304"
+      ],
+      "openscene_sensor_mini_6": [
+        "2021.10.11.02.57.41_veh-50_00352_00535",
+        "2021.08.30.14.54.34_veh-40_00439_00835"
+      ],
+      "openscene_sensor_mini_16": [
+        "2021.06.14.18.42.45_veh-12_03445_03902",
+        "2021.10.06.17.43.07_veh-28_00508_00877"
+      ]
+    }
+  },
+  "metadata_archive": {
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "raw_lfs_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/raw/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be",
+    "cdn_etag": "4974a350e9a3b90e8e3f861e0f6161f6f14765d654f90509e2bca823b2378f6c",
+    "archive_prefix": "openscene-v1.1/meta_datas/mini"
+  },
+  "camera_archives": {
+    "5": {
+      "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_5.tgz",
+      "raw_lfs_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/raw/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_5.tgz",
+      "size_bytes": 1767757511,
+      "sha256": "74df953723507a8dcd778c6d1feb2ef2a3e57b799a6e3b35f1728cb72384a595",
+      "cdn_etag": "4e33d3fedd8294cfd8072c7414beba05d2cf9ee8924702ce661db32155bc97ef",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "6": {
+      "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_6.tgz",
+      "raw_lfs_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/raw/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_6.tgz",
+      "size_bytes": 1928421301,
+      "sha256": "ac4d3b9ea7d0e3c2584f716a841b867ce45e76699e5aefaa61016c1a083c3f7b",
+      "cdn_etag": "91148bea610467ae705e66bbe64851e70c169c43ee3ed766f5cfc73d08774bdd",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "16": {
+      "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_16.tgz",
+      "raw_lfs_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/raw/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_16.tgz",
+      "size_bytes": 2903678609,
+      "sha256": "09fc68bca920dced27bf513eb9867f08f5f7d34e73733c99e9aaa31471bebc50",
+      "cdn_etag": "9f6293b69d2202e9df798e6ebf3fabdb144faa3ba540c4bc72b72f95ffae24dc",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    }
+  },
+  "recording_id_rule": "strip terminal _[0-9]+_[0-9]+ from the log basename",
+  "split_policy": "both already examined recordings are train; both unseen veh-50 recordings on 2021-10-11 are dev; the two other unseen recordings are final holdout",
+  "logs": {
+    "train": [
+      {
+        "recording_id": "2021.06.14.18.42.45_veh-12",
+        "log_name": "2021.06.14.18.42.45_veh-12_03445_03902",
+        "camera_shard": 16,
+        "member": "openscene-v1.1/meta_datas/mini/2021.06.14.18.42.45_veh-12_03445_03902.pkl",
+        "sample_count": 48,
+        "frame_count": 909,
+        "size_bytes": 22601091,
+        "sha256": "44e6387d345254aefb324e85bca075a1a750c3dfe6e943f43c9061b6cb893f19"
+      },
+      {
+        "recording_id": "2021.10.06.17.43.07_veh-28",
+        "log_name": "2021.10.06.17.43.07_veh-28_00508_00877",
+        "camera_shard": 16,
+        "member": "openscene-v1.1/meta_datas/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+        "sample_count": 48,
+        "frame_count": 738,
+        "size_bytes": 4832776,
+        "sha256": "d2a9b373da30670aaf327c2ab4ccc332e2b441be6cd5e3f72d77debd3adbcff3"
+      }
+    ],
+    "dev": [
+      {
+        "recording_id": "2021.10.11.07.12.18_veh-50",
+        "log_name": "2021.10.11.07.12.18_veh-50_00211_00304",
+        "camera_shard": 5,
+        "member": "openscene-v1.1/meta_datas/mini/2021.10.11.07.12.18_veh-50_00211_00304.pkl",
+        "sample_count": 24,
+        "size_bytes": 606339,
+        "sha256": "5f4a85d66b571644ab19d0ac1bedd884d799d8d912ab4f8a427f47d850dad696",
+        "frame_count": 186
+      },
+      {
+        "recording_id": "2021.10.11.02.57.41_veh-50",
+        "log_name": "2021.10.11.02.57.41_veh-50_00352_00535",
+        "camera_shard": 6,
+        "member": "openscene-v1.1/meta_datas/mini/2021.10.11.02.57.41_veh-50_00352_00535.pkl",
+        "sample_count": 24,
+        "size_bytes": 2150730,
+        "sha256": "bf5aea2919d8ebccf2e8a0509833be3f63d3c9a4323b6d15b25f4b9a69d1b9a6",
+        "frame_count": 366
+      }
+    ],
+    "holdout": [
+      {
+        "recording_id": "2021.06.09.14.58.55_veh-35",
+        "log_name": "2021.06.09.14.58.55_veh-35_01894_02311",
+        "camera_shard": 5,
+        "member": "openscene-v1.1/meta_datas/mini/2021.06.09.14.58.55_veh-35_01894_02311.pkl",
+        "sample_count": 32,
+        "size_bytes": 18049937,
+        "sha256": "ef4e0d925fe8d23662931b3f24aafd14e3cdfe90761e1e4dca5ac32f45621220",
+        "frame_count": 834
+      },
+      {
+        "recording_id": "2021.08.30.14.54.34_veh-40",
+        "log_name": "2021.08.30.14.54.34_veh-40_00439_00835",
+        "camera_shard": 6,
+        "member": "openscene-v1.1/meta_datas/mini/2021.08.30.14.54.34_veh-40_00439_00835.pkl",
+        "sample_count": 32,
+        "size_bytes": 8880298,
+        "sha256": "729c7abbd96738a99a59a6b493782f10eafd3f5903d602ff96518ebb818f5555",
+        "frame_count": 792
+      }
+    ]
+  },
+  "selection": {
+    "rule": "uniform-source-list-bin-midpoints-v1",
+    "frozen_before_inference": true,
+    "substitute_missing_frame": false
+  },
+  "rgb": {
+    "camera": "CAM_F0",
+    "profile": "openscene-nuplan-original-v1",
+    "resize": "pillow-bilinear",
+    "size": [
+      224,
+      224
+    ],
+    "capture_time": "openscene-associated-lidar-frame-no-camera-timestamp"
+  },
+  "loc": {
+    "rule": "nearest-eligible-annotated-vehicle-per-horizontal-band-v1",
+    "distance_reference": "ego-ground-plane",
+    "maximum_distance_m": 40,
+    "minimum_corner_depth_m": 0.1,
+    "require_all_corners_in_image": true,
+    "minimum_box_extent_px": 2,
+    "tie_break": "lower-annotation-row-index",
+    "boxes_2d": "rectified-cuboid-corner-aabb-edge-normalized-xyxy",
+    "negative": "no-eligible-vehicle-annotation-not-verified-visual-absence",
+    "bands": [
+      [
+        0,
+        0.25
+      ],
+      [
+        0.25,
+        0.5
+      ],
+      [
+        0.5,
+        0.75
+      ],
+      [
+        0.75,
+        1
+      ]
+    ],
+    "band_bounds": "left-closed-right-open",
+    "band_center": "(float32(xmin)+float32(xmax))*float32(0.5)"
+  }
+}

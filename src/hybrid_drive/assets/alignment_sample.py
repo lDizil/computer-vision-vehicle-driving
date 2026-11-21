@@ -20,7 +20,7 @@ from .alignment_manifest import (
     ARCHIVE_VERIFICATION, CAMERA, CENTER_X, IMAGE_SIZE, MANIFEST_NAME, MANIFEST_SCHEMA,
     MAX_DISTANCE_M, MIN_DEPTH_M, MIN_EXTENT_PX, SPLITS, TARGET_SCHEMA,
     digest_json, midpoint_indices, recording_id, rgb_path, sample_id, targets_path,
-    validate_alignment_sources, validate_jpeg_member, verify_alignment_sample,
+    validate_alignment_sources, validate_recording_jpeg_member, verify_alignment_sample,
 )
 from .cameras import BoundedTarReader, MAX_MEMBERS
 from .cohort import _extract_cameras, _read_padding, _verified_archive
@@ -114,13 +114,18 @@ def _read_metadata_members(archive, specs):
 
 
 def _select_frames(verified_log, sources, split):
-    spec = sources["logs"][split]
+    return _select_recording_frames(
+        verified_log, sources["logs"][split], sources["camera_archive"]["archive_prefix"], split,
+    )
+
+
+def _select_recording_frames(verified_log, spec, archive_prefix, label):
     frames = pickle.loads(verified_log)
     if not isinstance(frames, list):
-        raise PreparationError(f"{split} source metadata is not a list of frames")
+        raise PreparationError(f"{label} source metadata is not a list of frames")
     if len(frames) != spec["frame_count"]:
         raise PreparationError(
-            f"{split} source metadata has {len(frames)} frames, expected {spec['frame_count']}"
+            f"{label} source metadata has {len(frames)} frames, expected {spec['frame_count']}"
         )
     indices = set(midpoint_indices(spec["frame_count"], spec["sample_count"]))
     selected, tokens, image_members = [], set(), set()
@@ -138,8 +143,8 @@ def _select_frames(verified_log, sources, split):
             continue
         camera = frame["cams"][CAMERA]
         relative = safe_relative(camera["data_path"])
-        member = f"{sources['camera_archive']['archive_prefix']}/{relative}"
-        validate_jpeg_member(member, sources, split)
+        member = f"{archive_prefix}/{relative}"
+        validate_recording_jpeg_member(member, archive_prefix, spec["log_name"])
         if member in image_members:
             raise PreparationError("A frozen source JPEG is linked from more than one frame")
         image_members.add(member)
@@ -159,45 +164,12 @@ def _camera_allowlist(selected):
 
 
 def _prepare_split(stage, raw_root, selected, originals, sources, split):
-    from PIL import Image
-
     samples, targets = [], []
     for index, frame, _ in selected:
         identity = sample_id(split, index)
-        original = originals[identity]
-        with Image.open(destination(raw_root, original["path"])) as image:
-            native = np.asarray(image)
-        camera = frame["cams"][CAMERA]
-        view = prepare_openscene_camera(
-            CAMERA, native, camera["cam_intrinsic"], camera["sensor2lidar_rotation"],
-            camera["sensor2lidar_translation"], camera["distortion"],
-            profile=OPENSCENE_NATIVE_PROFILE, width=IMAGE_SIZE, height=IMAGE_SIZE,
-        )
-        pixels = view.frame.rgb
-        encoded = io.BytesIO()
-        Image.fromarray(pixels).save(encoded, format="PNG")
-        path = destination(stage, rgb_path(identity))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        data = encoded.getvalue()
-        path.write_bytes(data)
-        calibration = {
-            "camera_to_ego_rotation": np.asarray(camera["sensor2lidar_rotation"]).tolist(),
-            "camera_to_ego_translation": np.asarray(camera["sensor2lidar_translation"]).tolist(),
-            "native_intrinsic": np.asarray(camera["cam_intrinsic"]).tolist(),
-            "distortion": np.asarray(camera["distortion"]).tolist(),
-            "native_size": [original["width"], original["height"]],
-            "rectified_intrinsic": view.calibration.intrinsic.tolist(),
-            "ego_to_camera": view.calibration.ego_to_camera.tolist(),
-        }
-        samples.append({
-            "sample_id": identity, "source_list_index": index, "frame_token": frame["token"],
-            "scene_token": frame["scene_token"], "frame_idx": frame["frame_idx"], "timestamp_us": frame["timestamp"],
-            "jpeg": {key: original[key] for key in ("member", "size_bytes", "sha256", "width", "height")},
-            "rgb": {"path": rgb_path(identity), "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
-                    "pixels_sha256": hashlib.sha256(pixels.tobytes()).hexdigest()},
-            "calibration_sha256": digest_json(calibration),
-        })
-        targets.append(_loc_target(frame["anns"], view.calibration, identity))
+        sample, calibration = _prepare_frame(stage, raw_root, index, frame, originals[identity], identity)
+        samples.append(sample)
+        targets.append(_loc_target(frame["anns"], calibration, identity))
 
     relative_targets = targets_path(split)
     path = destination(stage, relative_targets)
@@ -211,6 +183,44 @@ def _prepare_split(stage, raw_root, selected, originals, sources, split):
         "samples": samples,
         "targets": {"path": relative_targets, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()},
     }
+
+
+def _prepare_frame(stage, raw_root, index, frame, original, identity):
+    from PIL import Image
+
+    with Image.open(destination(raw_root, original["path"])) as image:
+        native = np.asarray(image)
+    camera = frame["cams"][CAMERA]
+    view = prepare_openscene_camera(
+        CAMERA, native, camera["cam_intrinsic"], camera["sensor2lidar_rotation"],
+        camera["sensor2lidar_translation"], camera["distortion"],
+        profile=OPENSCENE_NATIVE_PROFILE, width=IMAGE_SIZE, height=IMAGE_SIZE,
+    )
+    pixels = view.frame.rgb
+    encoded = io.BytesIO()
+    Image.fromarray(pixels).save(encoded, format="PNG")
+    path = destination(stage, rgb_path(identity))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = encoded.getvalue()
+    path.write_bytes(data)
+    calibration = {
+        "camera_to_ego_rotation": np.asarray(camera["sensor2lidar_rotation"]).tolist(),
+        "camera_to_ego_translation": np.asarray(camera["sensor2lidar_translation"]).tolist(),
+        "native_intrinsic": np.asarray(camera["cam_intrinsic"]).tolist(),
+        "distortion": np.asarray(camera["distortion"]).tolist(),
+        "native_size": [original["width"], original["height"]],
+        "rectified_intrinsic": view.calibration.intrinsic.tolist(),
+        "ego_to_camera": view.calibration.ego_to_camera.tolist(),
+    }
+    sample = {
+        "sample_id": identity, "source_list_index": index, "frame_token": frame["token"],
+        "scene_token": frame["scene_token"], "frame_idx": frame["frame_idx"], "timestamp_us": frame["timestamp"],
+        "jpeg": {key: original[key] for key in ("member", "size_bytes", "sha256", "width", "height")},
+        "rgb": {"path": rgb_path(identity), "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                "pixels_sha256": hashlib.sha256(pixels.tobytes()).hexdigest()},
+        "calibration_sha256": digest_json(calibration),
+    }
+    return sample, view.calibration
 
 
 def _loc_target(annotations, calibration, identity):
@@ -247,7 +257,7 @@ def _loc_target(annotations, calibration, identity):
     return target
 
 
-def _project_cuboid(box, calibration):
+def _project_cuboid(box, calibration, *, center_x_range=CENTER_X):
     x, y, z, length, width, height, yaw = box
     cosine, sine = math.cos(yaw), math.sin(yaw)
     yaw_rotation = np.array([[cosine, -sine, 0], [sine, cosine, 0], [0, 0, 1]])
@@ -263,7 +273,7 @@ def _project_cuboid(box, calibration):
     size = np.array((calibration.width, calibration.height))
     # Convert pixel centers to image-edge fractions, as used by the 2D box head.
     normalized = (pixels + 0.5) / size
-    if not CENTER_X[0] <= normalized[8, 0] < CENTER_X[1]:
+    if center_x_range is not None and not center_x_range[0] <= normalized[8, 0] < center_x_range[1]:
         return None
     lower, upper = normalized[:8].min(axis=0), normalized[:8].max(axis=0)
     if np.any(lower < 0) or np.any(upper > 1) or np.any((upper - lower) * size < MIN_EXTENT_PX):
