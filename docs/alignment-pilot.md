@@ -57,3 +57,33 @@ images `[B,1,3,224,224]` in [0,1], presence `[B]`, 3D ego boxes `[B,7]`
 and normalized projected 2D boxes `[B,4]`. Missing boxes are masked targets,
 not zeros. The backbone owns RGB normalization; query priors are independent
 of these boxes.
+
+## Local pretrained backbones
+
+The pilot uses [DINOv2-small](https://huggingface.co/facebook/dinov2-small/tree/ed25f3a31f01632728cabb09d1542f84ab7b0056)
+and [Pythia-70M-deduped](https://huggingface.co/EleutherAI/pythia-70m-deduped/tree/c92722694b14c67e3f8ed3bf164bb2456449e720)
+with pinned immutable revisions. No pretrained vendor files are copied into the
+repository. The preparation command fetches only the exact allowlist, with SHA256
+verification; the loader rejects other file lists and requires safetensors.
+
+```sh
+# Networked preparation (256,395,567 bytes on a fresh setup).
+PYTHONPATH=src python -m scripts.prepare_alignment_models --root /path/to/alignment-backbones
+# The existing CPU image is the base (`docker build -t hybrid-drive:cpu .`).
+docker build -f Dockerfile.alignment -t hybrid-drive:alignment .
+```
+
+Run the model smoke with the backbone root mounted read-only at `/models`,
+`--network none`, and `ALIGNMENT_ASSET_ROOT=/models`:
+`python -m pytest -q tests/integration/pretrained_alignment_smoke.py`.
+The regular test environment and its checkpoints do not change. The distinct
+image installs hash-pinned Transformers/tokenizers dependencies. It fetches
+no model on import, testing or training.
+
+DINO gets a full rectified RGB frame, uses pinned ImageNet normalization and
+returns the 16 × 16 patch grid without the CLS token. This is not the classifier
+pipeline with center crop. Pythia stays in eval mode with frozen weights but
+retains differentiation through the supplied prefix. We use existing single
+token IDs for ` LOC` and ` MOT` aliases with no vocabulary change. For this pilot
+a fixed prompt ends in consumed ` LOC`; its hidden state is the one eligible
+event. The not-yet-consumed yes/no answer is a target, never a prompt input.

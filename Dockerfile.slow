@@ -13,6 +13,7 @@ RUN git init /build/llama \
     && cmake -S /build/llama -B /build/llama/build \
         -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DGGML_METAL=OFF \
         -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_BUILD_UI=OFF -DLLAMA_USE_PREBUILT_UI=OFF \
         -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DMTMD_VIDEO=OFF \
     && cmake --build /build/llama/build --target llama-server -j 1
 RUN git -C /build/llama rev-parse HEAD > /build/llama/build/bin/SOURCE_REVISION

@@ -1,0 +1,61 @@
+{
+  "schema": "hybrid-drive-alignment-model-sources-v1",
+  "models": {
+    "vision": {
+      "repository": "facebook/dinov2-small",
+      "revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+      "license": "Apache-2.0",
+      "directory": "dinov2-small",
+      "files": {
+        "model.safetensors": {
+          "size_bytes": 88249960,
+          "sha256": "ae1e99fcefd534ed978cdeb8326f08030c96e28b7a81ffcbc98a857c84d14be1",
+          "etag": "58591664a535b604df1061ec047ff77f564b950071c0f9045f4bb6bbea71c30f"
+        },
+        "config.json": {
+          "size_bytes": 547,
+          "sha256": "1809f83e3bdb1609a501a610ad4a742f4fd8ae44d72ca4aa0df52d1f2ac8628d",
+          "etag": "5664b325e6258d3960fad8c4c1cff958f3cc2272"
+        },
+        "preprocessor_config.json": {
+          "size_bytes": 436,
+          "sha256": "14e780d86fa1861f8751f868d7f45425b5feb55c38ca26f152ca5097ab30f828",
+          "etag": "ff5b47c2edcd1d3556d63c01a65d93b58b9efce1"
+        }
+      }
+    },
+    "language": {
+      "repository": "EleutherAI/pythia-70m-deduped",
+      "revision": "c92722694b14c67e3f8ed3bf164bb2456449e720",
+      "license": "Apache-2.0",
+      "directory": "pythia-70m-deduped",
+      "files": {
+        "model.safetensors": {
+          "size_bytes": 166029852,
+          "sha256": "3da388330e4549156d76b58d6d268c63cd005e9336b4f4d2d378421e7b7a33fd",
+          "etag": "524b4b9e2aece613a6b3f8db72bc4ef8e02bfc06244707b6a31e1f95568999fb"
+        },
+        "config.json": {
+          "size_bytes": 567,
+          "sha256": "002050231a9b1ec3ac77aa6b9b3bbdc4d923f4068a7dd33b8da72a9bd6ad9a43",
+          "etag": "d7a9196e329eaf06d6e2802fed376e7459834236"
+        },
+        "tokenizer.json": {
+          "size_bytes": 2113710,
+          "sha256": "c24618a1b3e6a38167beff1c72cffd126c3a66254347304b50547d12c5f25624",
+          "etag": "f74dfbfab8f97770a87769c739fb080c21c8bacc"
+        },
+        "tokenizer_config.json": {
+          "size_bytes": 396,
+          "sha256": "70e38394e494931c6f773ba41e19460dd4436526b852207367f04341b4066d3f",
+          "etag": "f1860edb10f80bcaf7b023fce47c68a23b724c23"
+        },
+        "special_tokens_map.json": {
+          "size_bytes": 99,
+          "sha256": "6f50ab5a5a509a1c309d6171f339b196a900dc9c99ad0408ff23bb615fdae7ad",
+          "etag": "0204ed10c186a4c7c68f55dff8f26087a45898d6"
+        }
+      }
+    }
+  }
+}

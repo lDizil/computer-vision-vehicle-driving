@@ -1,0 +1,19 @@
+ARG CPU_IMAGE=hybrid-drive:cpu
+FROM ${CPU_IMAGE}
+
+USER root
+COPY requirements/alignment-extra.lock /opt/requirements/
+# Replace the base Hub pin only in this image; all other transitive dependencies are in the base.
+RUN python -m pip install --no-cache-dir --no-deps --only-binary=:all: --require-hashes \
+        -r /opt/requirements/alignment-extra.lock \
+    && python -m pip check
+
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    TOKENIZERS_PARALLELISM=false
+
+COPY --chown=researcher:researcher src/ /workspace/src/
+COPY --chown=researcher:researcher scripts/ /workspace/scripts/
+COPY --chown=researcher:researcher tests/ /workspace/tests/
+USER researcher
