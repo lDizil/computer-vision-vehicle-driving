@@ -48,18 +48,31 @@ def prepare_alignment_models(root, sources_path, *, rate_limit_mib=4, opener=url
 
 def verify_alignment_models(root):
     """Verify the entire allowlist before any caller opens a model/config."""
+    paths, sources = _verify_roles(root, ("vision", "language"))
+    return paths["vision"], paths["language"], sources
+
+
+def verify_alignment_vision(root):
+    """Verify the pinned visual role without requiring the language files."""
+    paths, sources = _verify_roles(root, ("vision",))
+    return paths["vision"], {
+        "source": sources["models"]["vision"],
+        "sources_sha256": sources["sources_sha256"],
+    }
+
+
+def _verify_roles(root, roles):
     root = Path(os.path.abspath(root))
     check_components(root)
     _, sources = _read_sources(destination(root, SOURCES_FILENAME))
     directories = {}
-    for role, model in sources["models"].items():
-        files = _model_files(root, model)
-        for path, spec in files:
+    for role in roles:
+        model = sources["models"][role]
+        for path, spec in _model_files(root, model):
             if verify_file(path, size_bytes=spec.size_bytes, sha256=spec.sha256) is None:
                 raise PreparationError(f"Missing {model['directory']}/{path.name}")
         directories[role] = destination(root, model["directory"])
-    provenance = {**sources, "sources_sha256": _SOURCES_SHA256}
-    return directories["vision"], directories["language"], provenance
+    return directories, {**sources, "sources_sha256": _SOURCES_SHA256}
 
 
 def _read_sources(path):
