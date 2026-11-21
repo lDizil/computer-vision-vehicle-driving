@@ -1,0 +1,68 @@
+{
+  "schema": "hybrid-drive-alignment-data-sources-v1",
+  "navsim_revision": "3e8291bfa89ff247231e0227778840cd0a036896",
+  "nuplan_revision": "ce3c323af01c0d7ec5672f7832ef53f9c679aab0",
+  "license": {
+    "name": "CC-BY-NC-SA-4.0 with Motional dataset terms",
+    "url": "https://motional-nuplan.s3-ap-northeast-1.amazonaws.com/LICENSE"
+  },
+  "metadata_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be"
+  },
+  "camera_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_16.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "size_bytes": 2903678609,
+    "sha256": "09fc68bca920dced27bf513eb9867f08f5f7d34e73733c99e9aaa31471bebc50",
+    "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+  },
+  "logs": {
+    "train": {
+      "log_name": "2021.10.06.17.43.07_veh-28_00508_00877",
+      "member": "openscene-v1.1/meta_datas/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+      "size_bytes": 4832776,
+      "sha256": "d2a9b373da30670aaf327c2ab4ccc332e2b441be6cd5e3f72d77debd3adbcff3",
+      "frame_count": 738,
+      "sample_count": 64
+    },
+    "holdout": {
+      "log_name": "2021.06.14.18.42.45_veh-12_03445_03902",
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.14.18.42.45_veh-12_03445_03902.pkl",
+      "size_bytes": 22601091,
+      "sha256": "44e6387d345254aefb324e85bca075a1a750c3dfe6e943f43c9061b6cb893f19",
+      "frame_count": 909,
+      "sample_count": 32
+    }
+  },
+  "selection": {
+    "rule": "uniform-source-list-bin-midpoints-v1",
+    "frozen_before_inference": true,
+    "substitute_missing_frame": false
+  },
+  "rgb": {
+    "camera": "CAM_F0",
+    "profile": "openscene-nuplan-original-v1",
+    "resize": "pillow-bilinear",
+    "size": [
+      224,
+      224
+    ],
+    "capture_time": "openscene-associated-lidar-frame-no-camera-timestamp"
+  },
+  "loc": {
+    "rule": "nearest-eligible-annotated-vehicle-v1",
+    "distance_reference": "ego-ground-plane",
+    "maximum_distance_m": 40,
+    "camera_center_x_range": "[0.25,0.75)",
+    "minimum_corner_depth_m": 0.1,
+    "require_all_corners_in_image": true,
+    "minimum_box_extent_px": 2,
+    "tie_break": "lower-annotation-row-index",
+    "boxes_3d": "ego-center-x-y-z-width-length-height-yaw-m-rad",
+    "boxes_2d": "rectified-cuboid-corner-aabb-edge-normalized-xyxy",
+    "negative": "no-eligible-vehicle-annotation-not-verified-visual-absence"
+  }
+}

@@ -219,7 +219,7 @@ def _extract_cameras(archive, root, sources):
                     records[member.name] = _write_camera(tar, root, entry, member.size)
                 tar.skip((-member.size) % 512)
         if set(records) != set(allowlist):
-            raise PreparationError("Camera archive does not contain all 18 allowlisted JPEGs")
+            raise PreparationError(f"Camera archive does not contain all {len(allowlist)} allowlisted JPEGs")
     except (tarfile.TarError, EOFError, gzip.BadGzipFile, zlib.error, UnicodeError, OSError) as exc:
         raise PreparationError("Invalid or truncated camera archive") from exc
     return [records[entry["member"]] for entry in entries]
