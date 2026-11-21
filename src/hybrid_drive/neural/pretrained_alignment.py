@@ -5,7 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 import torch
 from torch import Tensor, nn
 
-from hybrid_drive.assets.alignment_models import verify_alignment_models
+from hybrid_drive.assets.alignment_models import verify_alignment_models, verify_alignment_vision
 
 
 _IMAGE_SIZE = 224
@@ -42,35 +42,57 @@ def load_alignment_backbones(asset_root):
     vision_path, language_path, provenance = verify_alignment_models(asset_root)
     runtime = _runtime_versions()
 
-    from transformers import Dinov2Config, Dinov2Model, GPTNeoXConfig, GPTNeoXForCausalLM, GPTNeoXTokenizerFast
+    from transformers import GPTNeoXConfig, GPTNeoXForCausalLM, GPTNeoXTokenizerFast
 
     tokenizer = GPTNeoXTokenizerFast.from_pretrained(language_path, local_files_only=True)
     prompt_ids = _encode_prompt(tokenizer)
-    vision_config = _checked_config(
-        Dinov2Config, vision_path, model_type="dinov2", hidden_size=_VISUAL_DIM, patch_size=_PATCH_SIZE,
-        image_size=518, num_channels=3, num_hidden_layers=12, num_attention_heads=6,
-    )
     language_config = _checked_config(
         GPTNeoXConfig, language_path, model_type="gpt_neox", hidden_size=_LLM_DIM, vocab_size=_VOCAB_SIZE,
         max_position_embeddings=_CONTEXT_SIZE, num_hidden_layers=6, num_attention_heads=8,
     )
-    vision = _DinoPatchGrid(_load_model(Dinov2Model, vision_path, vision_config))
+    vision = _load_vision(vision_path)
     language = _PythiaPrefix(
         _load_model(GPTNeoXForCausalLM, language_path, language_config, ignored=_PYTHIA_LEGACY_BUFFERS),
         prompt_ids,
     )
     provenance.update(
         runtime={**runtime, "device": "cpu", "dtype": "float32", "attention": "eager"},
-        preprocessing={
-            "input": "rectified_full_image_rgb_0_1",
-            "image_size": _IMAGE_SIZE,
-            "patch_size": _PATCH_SIZE,
-            "mean": list(_MEAN),
-            "std": list(_STD),
-        },
+        preprocessing=_vision_preprocessing(),
         tokenization={"aliases": dict(_TOKEN_ALIASES), "prompt": _PROMPT, "prompt_ids": prompt_ids},
     )
     return vision, language, provenance
+
+
+def load_alignment_vision(asset_root):
+    """Load only the verified visual encoder, without materializing the LLM."""
+    vision_path, provenance = verify_alignment_vision(asset_root)
+    runtime = _runtime_versions()
+    vision = _load_vision(vision_path)
+    return vision, {
+        **provenance,
+        "runtime": {**runtime, "device": "cpu", "dtype": "float32", "attention": "eager"},
+        "preprocessing": _vision_preprocessing(),
+    }
+
+
+def _load_vision(path):
+    from transformers import Dinov2Config, Dinov2Model
+
+    config = _checked_config(
+        Dinov2Config, path, model_type="dinov2", hidden_size=_VISUAL_DIM, patch_size=_PATCH_SIZE,
+        image_size=518, num_channels=3, num_hidden_layers=12, num_attention_heads=6,
+    )
+    return _DinoPatchGrid(_load_model(Dinov2Model, path, config))
+
+
+def _vision_preprocessing():
+    return {
+        "input": "rectified_full_image_rgb_0_1",
+        "image_size": _IMAGE_SIZE,
+        "patch_size": _PATCH_SIZE,
+        "mean": list(_MEAN),
+        "std": list(_STD),
+    }
 
 
 def _runtime_versions():

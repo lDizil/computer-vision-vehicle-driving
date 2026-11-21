@@ -40,3 +40,19 @@ python -m scripts.prepare_spatial_sample --root /results/spatial-loc   --metadat
 
 Run in the pinned CPU image with sources read-only and no network. By default
 the CLI reports the frozen identities and sample counts, not target statistics.
+
+## Image-dependent head
+
+`load_alignment_vision` loads only the pinned DINOv2 encoder; Pythia files
+are not required. The frozen ViT returns feature maps `[B,C,H,W]`,
+and the `SpatialLocProbe` gets no target boxes or track identities.
+It combines patch channels with normalized x/y coordinates, producing shared
+per-cell scores and extents. Logmeanexp over a band's cells gives a presence
+logit. Softmax-weighted patch centers and sizes give a box prediction.
+
+On a 16 × 16 grid, weighted patch centers cannot reach the half-patch margin
+(7 pixels on a 224 image) at the edge of a band. This limits small-object
+localization; it is not a label clipping rule. The loss is class-weighted BCE
+on all queries, cell classification and normalized 2D SmoothL1/GIoU only on
+positive labels. Training counts alone set the class weight. The class and cell
+masks preserve the canonical float32 band assignment after a dtype conversion.
