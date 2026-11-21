@@ -103,3 +103,43 @@ of the 3D box. It supports the project's 2D GIoU loss without pretending that
 axis-aligned 2D overlap measures oriented 3D overlap. Raw untrained box/motion
 outputs are not physically validated detections or driving trajectories.
 Empty E is backward-safe. Tensors keep ordinary PyTorch ownership semantics.
+
+## Project loss and synthetic optimization
+
+`Reason2DriveLoss` follows our project ticket recipe:
+
+```
+L = CE_text + lambda_per * (BCE_validity + box_weight * SmoothL1_3D
+                           + giou_weight * GIoU_2D + motion_weight * SmoothL1_motion)
+```
+
+This is not claimed to reproduce the paper's BCE/MSE recipe. The oriented
+7D box and auxiliary image-space 2D box are different heads. GIoU uses the
+latter only. The 3D yaw residual wraps to its shortest angular arc before
+SmoothL1; target box dimensions are positive. Motion targets follow the
+configured decoder sampling in the same ego frame.
+
+Text logits and labels must already be aligned by the LLM adapter; the loss
+cannot infer decoder-only versus encoder-decoder shifting. Event targets
+match exact batch/token positions and LOC/MOT kinds. Each term averages its
+own supervised elements. Negative validity, unknown label and padding are
+separate: regression uses positive events of the relevant task and only
+known coordinates/future steps. Unknown future is not a zero target.
+All-ignore/empty components remain differentiable zeros without reading
+padded NaNs. Nonfinite supervised inputs and mismatched event identity fail.
+
+`run_neural_core_smoke` executes real CPU optimizer steps through a frozen
+tiny torchvision ViT and a frozen tiny causal Transformer fixture. They are
+newly initialized, not pretrained encoders or LLMs. The core tokenizer,
+projector and instructed decoder update; frozen weights stay bitwise equal.
+We do not place the frozen LLM forward under `no_grad`: input-prefix gradients
+must still pass through it. A regression test detects accidental detachment.
+
+The experiment records per-component losses/gradient norms and a self-contained
+plot. It is a synthetic mathematical smoke, not real-data alignment, held-out
+quality, a full Reason2Drive checkpoint, Stage 1 completion or better driving.
+
+Neural weight artifacts use bounded safetensors, explicit expected SHA256 and
+experiment metadata, strict keys/dtypes/shapes and prevalidation of every
+module before copying state. They contain core weights only, not optimizer
+resume state or a dynamically imported model factory. No pickle is loaded.

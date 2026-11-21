@@ -14,6 +14,7 @@
 - Визуально-пространственное планирование на основе FSDrive.
 - Мультимодальный анализ рисков и объяснение манёвров с использованием подходов Reason2Drive.
 - Обмен визуальными и пространственными признаками между контурами через Prior Tokenizer Bridge.
+- Обучаемое PyTorch-ядро: PriorTokenizer, query-transformer, декодирование боксов/траекторий и masked loss.
 - Проверка траекторий и обработка опасных кандидатов в Safety Veto.
 - Асинхронное взаимодействие быстрого и медленного контуров.
 - Сравнение агентов в NAVSIM и испытания замкнутого контура в CARLA / Bench2Drive.
@@ -26,8 +27,9 @@ Python · PyTorch · FSDrive · Reason2Drive · NAVSIM · CARLA · Bench2Drive
 
 - [Архитектура проекта](docs/architecture.md)
 - [Структура кода и поток данных](docs/project-structure.md)
+- [Нейросетевое ядро и тензорные интерфейсы](docs/neural-core.md)
 - [Исходник архитектурной схемы](docs/diagrams/architecture.svg)
-- [Задачи проекта в YouTrack](https://goddev.youtrack.cloud/issues/MV)
+- [Задачи проекта в YouTrack](https://goddev.myjetbrains.com/youtrack/issues/MV)
 
 ## Права
 
