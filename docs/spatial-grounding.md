@@ -56,3 +56,35 @@ localization; it is not a label clipping rule. The loss is class-weighted BCE
 on all queries, cell classification and normalized 2D SmoothL1/GIoU only on
 positive labels. Training counts alone set the class weight. The class and cell
 masks preserve the canonical float32 band assignment after a dtype conversion.
+
+## Frozen paired evaluation
+
+Train seed 0 and 1 on the same two training recordings, using both real
+features and a matched zero-feature control. The control retains the same
+patch coordinate channels, initialization, optimizer, order and labels.
+The default recipe is eight epochs, batch size eight, AdamW at 0.002.
+
+For each condition choose a single threshold using dev recordings only.
+Average positive recall across recordings that contain positives, average
+specificity across recordings that contain negatives, then average those
+two rates. A negative-only dev recording still contributes to specificity.
+Tie-break by the threshold closest to zero, then the lower threshold.
+No tuning or checkpoint selection uses final recordings.
+
+Save all four model weights and threshold receipts before constructing the
+holdout reader, then evaluate the reloaded exact states. Compare within each
+seed. The shuffled diagnostic rotates vision features within each holdout
+recording while keeping the original labels and dev threshold. Report class
+counts, recording-level balanced accuracy, ROC AUC with tied scores counted
+as half, and projected box IoU over all positive labels, not only predicted
+positives. Pooled and recording-macro values are different estimands.
+
+```sh
+python -m scripts.run_spatial_experiment --data-root /data --model-root /models   --output-root /results --revision '<exact commit SHA>' --epochs 8 --batch-size 8 --seeds 0 1
+```
+
+Use the pinned alignment CPU image with no network and read-only input
+mounts. `/models` needs only the DINO directory and pinned manifest.
+The independent zero and shuffled controls measure image dependence on
+this split; two final recordings are not a broad validation of perception.
+No learned model from this experiment is enabled in the driving runtime.
