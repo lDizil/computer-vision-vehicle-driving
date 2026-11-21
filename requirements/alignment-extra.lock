@@ -1,0 +1,13 @@
+--index-url https://pypi.org/simple
+
+# Apache-licensed packages; official PyPI wheels for Python 3.10, Linux arm64/amd64.
+huggingface-hub==0.23.5 \
+    --hash=sha256:d7a7d337615e11a45cc14a0ce5a605db6b038dc24af42866f731684825226e90
+regex==2024.5.15 \
+    --hash=sha256:5eaa7ddaf517aa095fa8da0b5015c44d03da83f5bd49c87961e3c997daed0de7 \
+    --hash=sha256:1337b7dbef9b2f71121cdbf1e97e40de33ff114801263b275aafd75303bd62b5
+tokenizers==0.19.1 \
+    --hash=sha256:453e4422efdfc9c6b6bf2eae00d5e323f263fff62b29a8c9cd526c5003f3f642 \
+    --hash=sha256:8b01afb7193d47439f091cd8f070a1ced347ad0f9144952a30a41836902fe09e
+transformers==4.40.2 \
+    --hash=sha256:71cb94301ec211a2e1d4b8c8d18dcfaa902dfa00a089dceca167a8aa265d6f2d
