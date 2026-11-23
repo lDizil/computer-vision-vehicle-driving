@@ -22,6 +22,7 @@ from hybrid_drive.neural.spatial_data import SpatialAlignmentDataset, collate_sp
 
 
 SOURCES = Path(__file__).resolve().parents[2] / "scripts" / "spatial-loc-sources.json"
+EVALUATION_SOURCES = SOURCES.with_name("spatial-loc-evaluation-sources.json")
 ROTATION = [[0, 0, 1], [-1, 0, 0], [0, -1, 0]]
 INTRINSIC = [[112, 0, 111.5], [0, 112, 111.5], [0, 0, 1]]
 
@@ -43,10 +44,21 @@ def _archive(path, spec, entries):
 
 @pytest.fixture()
 def fixed_archives(tmp_path, monkeypatch):
-    sources = load_spatial_sources(SOURCES)
+    return _fixed_archives(tmp_path, monkeypatch, SOURCES, "_SOURCE_HASH")
+
+
+@pytest.fixture()
+def evaluation_archives(tmp_path, monkeypatch):
+    archives = tmp_path / "evaluation-fixture"
+    archives.mkdir()
+    return _fixed_archives(archives, monkeypatch, EVALUATION_SOURCES, "_EVALUATION_SOURCE_HASH")
+
+
+def _fixed_archives(tmp_path, monkeypatch, source_path, hash_attr):
+    sources = load_spatial_sources(source_path)
     logs = {}
     images = {shard: [] for shard in sources["camera_archives"]}
-    specs = [log for split in SPLITS for log in sources["logs"][split]]
+    specs = [log for records in sources["logs"].values() for log in records]
     for offset, spec in enumerate(specs, 1):
         shard = str(spec["camera_shard"])
         prefix = sources["camera_archives"][shard]["archive_prefix"]
@@ -89,7 +101,7 @@ def fixed_archives(tmp_path, monkeypatch):
         _archive(metadata_path, sources["metadata_archive"], metadata)
         for shard, camera_path in archive_paths.items():
             _archive(camera_path, sources["camera_archives"][shard], images[shard])
-        monkeypatch.setattr(spatial_manifest, "_SOURCE_HASH", digest_json(sources))
+        monkeypatch.setattr(spatial_manifest, hash_attr, digest_json(sources))
         return prepare_spatial_sample(path, sources, metadata_path, archive_paths)
 
     return root, sources, logs, images, prepare
@@ -271,3 +283,54 @@ def test_rejects_posthoc_symlink_traversal_and_rgb_corruption(fixed_archives):
     _rewrite_manifest(root, manifest)
     with pytest.raises(PreparationError, match="file path"):
         SpatialAlignmentDataset(root, "train")
+
+
+
+def test_evaluation_source_is_pinned_to_one_shard_and_two_holdout_recordings():
+    sources = load_spatial_sources(EVALUATION_SOURCES)
+    assert spatial_manifest.validate_spatial_sources(sources) == ("holdout",)
+    assert set(sources["camera_archives"]) == {"4"}
+    assert [(log["recording_id"], log["camera_shard"], log["sample_count"])
+            for log in sources["logs"]["holdout"]] == [
+        ("2021.06.09.17.23.18_veh-38", 4, 32), ("2021.08.24.13.12.55_veh-45", 4, 32),
+    ]
+    sources["logs"]["holdout"][0]["sample_count"] -= 1
+    with pytest.raises(PreparationError, match="pinned recordings and protocol"):
+        spatial_manifest.validate_spatial_sources(sources)
+
+
+def test_evaluation_archive_produces_only_fresh_holdout(evaluation_archives, monkeypatch):
+    root, sources, _, _, prepare = evaluation_archives
+    manifest = prepare()
+    assert set(manifest["splits"]) == {"holdout"}
+    assert set(f.name for f in (root / "targets").iterdir()) == {"holdout.json"}
+    dataset = SpatialAlignmentDataset(root, "holdout")
+    planned = [log["recording_id"] for log in sources["logs"]["holdout"]]
+    assert len(dataset) == 4
+    assert dataset.recording_ids == tuple(identity for identity in planned for _ in range(2))
+    assert dataset.sample_ids == tuple(sample_id("holdout", identity, idx)
+                                      for identity in planned for idx in (1, 3))
+    assert dataset[0].presence.tolist() == [True, False, True, False]
+    assert prepare() == manifest
+
+    def fail_if_read(*_args):
+        pytest.fail("Opened holdout targets trying to load an absent role")
+
+    monkeypatch.setattr(spatial_manifest, "_read_verified", fail_if_read)
+    for role in ("train", "dev"):
+        with pytest.raises(ValueError, match=f"does not contain the {role} split"):
+            SpatialAlignmentDataset(root, role)
+
+
+def test_preparation_never_reuses_a_pack_with_other_pinned_sources(fixed_archives, evaluation_archives, monkeypatch):
+    old_root, _, _, _, prepare_old = fixed_archives
+    _, _, _, _, prepare_evaluation = evaluation_archives
+    old = prepare_old()
+
+    def fail_if_read(*_args):
+        pytest.fail("Opened targets in the wrong pack")
+
+    monkeypatch.setattr(spatial_manifest, "_read_verified", fail_if_read)
+    with pytest.raises(PreparationError, match="different pinned sources"):
+        prepare_evaluation(old_root)
+    assert spatial_manifest.read_spatial_manifest(old_root) == old

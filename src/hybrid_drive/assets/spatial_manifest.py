@@ -21,10 +21,12 @@ from .files import PreparationError, destination
 SPLITS = ("train", "dev", "holdout")
 BAND_COUNT = 4
 SOURCE_SCHEMA = "hybrid-drive-spatial-loc-sources-v1"
+EVALUATION_SOURCE_SCHEMA = "hybrid-drive-spatial-loc-evaluation-sources-v1"
 MANIFEST_NAME = "spatial-loc-manifest.json"
 MANIFEST_SCHEMA = "hybrid-drive-spatial-loc-data-v1"
 TARGET_SCHEMA = "hybrid-drive-spatial-loc-targets-v1"
 _SOURCE_HASH = "31028c73e338ad3ffb5047af0a9042c36950529bb15736ae0558abd55df84280"
+_EVALUATION_SOURCE_HASH = "73c19f6c0e65e2f505d0e03efa61dcda0b5128b59184b34d21aaed827907c949"
 _MAX_MANIFEST_BYTES = 512 * 1024
 _MAX_TARGET_BYTES = 128 * 1024
 
@@ -36,12 +38,20 @@ def load_spatial_sources(path):
 
 
 def validate_spatial_sources(sources):
-    if (not isinstance(sources, dict) or sources.get("schema") != SOURCE_SCHEMA
-            or digest_json(sources) != _SOURCE_HASH):
+    """Validate a pinned source document and return its ordered roles."""
+    schema = sources.get("schema") if isinstance(sources, dict) else None
+    if schema == SOURCE_SCHEMA:
+        expected_hash, splits = _SOURCE_HASH, SPLITS
+    elif schema == EVALUATION_SOURCE_SCHEMA:
+        expected_hash, splits = _EVALUATION_SOURCE_HASH, ("holdout",)
+    else:
+        raise PreparationError("Unknown spatial source schema")
+    if digest_json(sources) != expected_hash:
         raise PreparationError("Spatial sources differ from the pinned recordings and protocol")
 
+    require_keys(sources["logs"], set(splits), "spatial source roles")
     recordings, group_owners = set(), {}
-    for split in SPLITS:
+    for split in splits:
         for log in sources["logs"][split]:
             name = log["log_name"]
             identity = recording_id(name)
@@ -53,6 +63,7 @@ def validate_spatial_sources(sources):
                 raise PreparationError("A source date+vehicle group cannot cross spatial splits")
             if not 0 < log["sample_count"] <= log["frame_count"]:
                 raise PreparationError("Spatial source metadata cannot supply its frozen sample count")
+    return splits
 
 
 def sample_id(split, identity, index):
@@ -71,7 +82,7 @@ def read_spatial_manifest(root):
     manifest = decode_json(read_bounded(destination(root, MANIFEST_NAME), _MAX_MANIFEST_BYTES))
     require_keys(manifest, {"schema", "sources", "archive_verification", "splits", "manifest_hash"}, "spatial manifest")
     sources = manifest["sources"]
-    validate_spatial_sources(sources)
+    splits = validate_spatial_sources(sources)
     unsigned = {key: value for key, value in manifest.items() if key != "manifest_hash"}
     if (manifest["schema"] != MANIFEST_SCHEMA or manifest["archive_verification"] != ARCHIVE_VERIFICATION
             or manifest["manifest_hash"] != digest_json(unsigned)):
@@ -80,8 +91,8 @@ def read_spatial_manifest(root):
     files = {MANIFEST_NAME}
     frame_tokens, jpeg_members, log_tokens = set(), set(), set()
     jpeg_roles, pixel_roles = {}, {}
-    require_keys(manifest["splits"], set(SPLITS), "spatial splits")
-    for split in SPLITS:
+    require_keys(manifest["splits"], set(splits), "spatial splits")
+    for split in splits:
         partition = manifest["splits"][split]
         require_keys(partition, {"recordings", "targets"}, "spatial split")
         recordings, specs = partition["recordings"], sources["logs"][split]
@@ -133,6 +144,8 @@ def _validate_recording(recording, spec, archive_prefix, split):
 def read_spatial_targets(root, manifest, split):
     if split not in SPLITS:
         raise ValueError("Spatial split must be train, dev or holdout")
+    if split not in manifest["splits"]:
+        raise ValueError(f"Spatial pack does not contain the {split} split")
     partition = manifest["splits"][split]
     targets = decode_json(_read_verified(root, partition["targets"], _MAX_TARGET_BYTES))
     require_keys(targets, {"schema", "split", "rows"}, "spatial targets")
@@ -173,9 +186,11 @@ def read_spatial_rgb(root, record):
     return read_alignment_rgb(root, record)
 
 
-def verify_spatial_sample(root):
+def verify_spatial_sample(root, *, expected_sources=None):
     manifest = read_spatial_manifest(root)
-    for split in SPLITS:
+    if expected_sources is not None and manifest["sources"] != expected_sources:
+        raise PreparationError("Prepared spatial pack uses different pinned sources")
+    for split in manifest["splits"]:
         read_spatial_targets(root, manifest, split)
         for recording in manifest["splits"][split]["recordings"]:
             for item in recording["samples"]:
