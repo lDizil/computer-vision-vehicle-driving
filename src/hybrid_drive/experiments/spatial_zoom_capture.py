@@ -91,17 +91,7 @@ def capture_zoom_grids(inputs, model_root, output_root, *, revision, frame_batch
         print(f"Encoding same windows on full frames and crops: {role}", flush=True)
         fixed = inputs.decisions[role]
         pack = inputs.packs[role]
-        state = torch.tensor([tuple(s == PRESENT for s in d.states) for d in fixed], dtype=torch.bool)
-        original = torch.tensor([d.boxes for d in fixed], dtype=torch.float32)
-        batches = []
-        for offset in range(0, len(fixed), frame_batch_size):
-            sl = slice(offset, offset + frame_batch_size)
-            rgb = torch.stack([
-                torch.from_numpy(read_spatial_rgb(pack.root, frame.rgb)).permute(2, 0, 1).float().div_(255)
-                for frame in pack.frames[sl]
-            ]).unsqueeze(1)
-            batches.append(encode_zoom_pair(vision, rgb, original[sl], state[sl]))
-        grids = ZoomGrids(*(torch.cat(items, dim=0) for items in zip(*batches)))
+        original, state, grids = capture_zoom_role(vision, pack, fixed, frame_batch_size=frame_batch_size)
         path = root / _features_name(role)
         digest = _write_compact(path, grids, original, state, dim, _binding(inputs, role))
         roles[role] = {
@@ -120,6 +110,29 @@ def capture_zoom_grids(inputs, model_root, output_root, *, revision, frame_batch
     digest = hashlib.sha256(read_bounded(path, _MAX_META)).hexdigest()
     reopen_zoom_capture(root, inputs, expected_sha256=digest)
     return root, digest
+
+
+def capture_zoom_role(vision, pack, decisions, *, frame_batch_size=4):
+    """Encode the exact ordered visible boxes of an already verified clip pack."""
+    if type(frame_batch_size) is not int or not 1 <= frame_batch_size <= 4:
+        raise ValueError("Crop capture takes 1–4 frames per image batch")
+    if (
+        not decisions
+        or tuple(d.observation.sample_id for d in decisions) != tuple(f.sample_id for f in pack.frames)
+    ):
+        raise ValueError("Crop frames differ from the fixed prediction order")
+    state = torch.tensor([tuple(s == PRESENT for s in d.states) for d in decisions], dtype=torch.bool)
+    original = torch.tensor([d.boxes for d in decisions], dtype=torch.float32)
+    batches = []
+    for offset in range(0, len(decisions), frame_batch_size):
+        sl = slice(offset, offset + frame_batch_size)
+        rgb = torch.stack([
+            torch.from_numpy(read_spatial_rgb(pack.root, frame.rgb)).permute(2, 0, 1).float().div_(255)
+            for frame in pack.frames[sl]
+        ]).unsqueeze(1)
+        batches.append(encode_zoom_pair(vision, rgb, original[sl], state[sl]))
+    grids = ZoomGrids(*(torch.cat(items, dim=0) for items in zip(*batches)))
+    return original, state, grids
 
 
 def reopen_zoom_capture(root, inputs, *, expected_sha256):

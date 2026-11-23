@@ -54,9 +54,9 @@ def _store(root, relative, payload):
     return {"path": relative, "size_bytes": len(data), "sha256": _sha(data)}
 
 
-def _fixture(tmp, monkeypatch, *, fault=None):
+def _fixture(tmp, monkeypatch, *, fault=None, role=ROLE):
     monkeypatch.setattr(truth, "sys", SimpleNamespace(platform="linux"))
-    sources = _sources(ROLE)
+    sources = _sources(role)
     root = tmp / "pack"
     root.mkdir()
 
@@ -128,17 +128,18 @@ def _fixture(tmp, monkeypatch, *, fault=None):
 
     archive = tmp / "metadata.tgz"
     sources["metadata_archive"].update(_archive(archive, logs))
-    monkeypatch.setitem(spatial._TEMPORAL_SOURCE_HASHES, ROLE, digest_json(sources))
+    monkeypatch.setitem(spatial._TEMPORAL_SOURCE_HASHES, role, digest_json(sources))
     targets = _store(root, "targets/holdout.json", {"schema": spatial.TARGET_SCHEMA, "split": "holdout", "rows": rows})
     pack = {"schema": spatial.MANIFEST_SCHEMA, "sources": sources, "archive_verification": ARCHIVE_VERIFICATION,
             "splits": {"holdout": {"recordings": recordings, "targets": targets}}}
     pack["manifest_hash"] = digest_json(pack)
     _store(root, spatial.MANIFEST_NAME, pack)
-    return read_temporal_spatial_pack(root, role=ROLE), archive, tmp / "truth.json"
+    return read_temporal_spatial_pack(root, role=role), archive, tmp / "truth.json"
 
 
-def test_tracks_follow_raw_track_tokens_across_bands_and_have_recording_scope(tmp_path, monkeypatch):
-    pack, archive, path = _fixture(tmp_path, monkeypatch)
+@pytest.mark.parametrize("role", [ROLE, spatial.ZOOM_GATE_HOLDOUT_ROLE])
+def test_tracks_follow_raw_track_tokens_across_bands_and_have_recording_scope(tmp_path, monkeypatch, role):
+    pack, archive, path = _fixture(tmp_path, monkeypatch, role=role)
     original = os.open
 
     def no_rgb(file, *args, **kwargs):
@@ -150,6 +151,7 @@ def test_tracks_follow_raw_track_tokens_across_bands_and_have_recording_scope(tm
     digest = truth.prepare_track_truth(pack, archive, path)
     assert _sha(path.read_bytes()) == digest
     assert all(token not in path.read_text() for token in RAW_TRACKS)
+    assert json.loads(path.read_bytes())["temporal_role"] == role
     labels = truth.read_track_truth(pack, path, expected_sha256=digest)
     assert list(labels) == [frame.sample_id for frame in pack.frames]
     a, b, other = [labels[pack.frames[index].sample_id] for index in (0, 1, 72)]
