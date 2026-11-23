@@ -16,7 +16,7 @@ _LABELS = {
 }
 
 
-def write_tracking_gallery(path, pack, targets, predictions, *, selected):
+def write_tracking_gallery(path, pack, targets, predictions, *, selected, mode_labels=None):
     baseline = predictions["zone"]
     truth, public_truth = {}, {}
     clip_labels, previous = {}, None
@@ -43,7 +43,7 @@ def write_tracking_gallery(path, pack, targets, predictions, *, selected):
     }
     write_temporal_spatial_gallery(
         path, pack, public_truth, overlays, selected_name=selected, baseline_name="zone",
-        mode_labels=_LABELS, truth_ids=truth, predicted_ids=display_ids,
+        mode_labels=_LABELS if mode_labels is None else mode_labels, truth_ids=truth, predicted_ids=display_ids,
     )
 
 

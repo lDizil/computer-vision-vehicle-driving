@@ -45,6 +45,24 @@ class TrackingTarget:
         object.__setattr__(self, "boxes", projected.boxes)
 
 
+def match_tracking_frame(
+    decision: FrameDecision, target: TrackingTarget, *, min_iou=0.5,
+) -> tuple[tuple[int, int], ...]:
+    """Return deterministic (prediction band, target band) pairs before using any IDs."""
+    threshold = _checked_min_iou(min_iou)
+    if not isinstance(decision, FrameDecision) or not isinstance(target, TrackingTarget):
+        raise ValueError("Expected FrameDecision and TrackingTarget for fixed frame matching")
+    active = tuple(band for band, state in enumerate(decision.states) if state == PRESENT)
+    labeled = tuple(band for band, alias in enumerate(target.track_ids) if alias is not None)
+    return _match_frame(decision.boxes, active, target.boxes, labeled, threshold)
+
+
+def _checked_min_iou(value):
+    if not isinstance(value, Real) or isinstance(value, bool) or not 0 < value <= 1:
+        raise ValueError("Expected a minimum IoU in (0, 1]")
+    return float(value)
+
+
 def evaluate_tracking(frames, targets: Mapping[str, TrackingTarget], *, min_iou=0.5) -> dict:
     """Score identity labels without changing which detections match spatially.
 
@@ -60,8 +78,7 @@ def evaluate_tracking(frames, targets: Mapping[str, TrackingTarget], *, min_iou=
     Unmatched emissions do not validate an identity link. Cuts, skipped source
     indices and long time gaps break both types of links and the ID assignment.
     """
-    if not isinstance(min_iou, Real) or isinstance(min_iou, bool) or not 0 < min_iou <= 1:
-        raise ValueError("Expected a minimum IoU in (0, 1]")
+    threshold = _checked_min_iou(min_iou)
     rows = _checked_rows(frames)
     if not isinstance(targets, Mapping) or set(targets) != {row.source.sample_id for row in rows}:
         raise ValueError("Expected exactly one tracking target per evaluated sample ID")
@@ -72,7 +89,7 @@ def evaluate_tracking(frames, targets: Mapping[str, TrackingTarget], *, min_iou=
     for recording, segments in groupby(_segments(rows), key=lambda segment: segment[0].source.recording_id):
         observed = _Counts()
         for segment in segments:
-            observed.add(_measure_segment(segment, targets, float(min_iou)))
+            observed.add(_measure_segment(segment, targets, threshold))
         total.add(observed)
         per_recording[recording] = observed.summary()
 
