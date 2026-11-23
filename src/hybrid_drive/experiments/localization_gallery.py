@@ -24,6 +24,7 @@ class GalleryPredictions:
     scores: np.ndarray
     boxes: np.ndarray
     threshold: float
+    uncertain: np.ndarray | None = None
 
 
 def write_localization_gallery(
@@ -129,7 +130,15 @@ def _validate_variants(variants, frame_count):
         # Match spatial_metrics at the cutoff, including when the saved threshold
         # is just above a float32 score and would round down in its original dtype.
         shown = scores.astype(np.float64) >= float(threshold)
-        checked.append((label, boxes, shown, float(threshold)))
+        uncertain = prediction.uncertain
+        if uncertain is not None and (
+            not isinstance(uncertain, np.ndarray)
+            or uncertain.shape != shape
+            or uncertain.dtype != np.bool_
+            or (uncertain & shown).any()
+        ):
+            raise ValueError("Gallery uncertainty must be an aligned boolean mask disjoint from shown boxes")
+        checked.append((label, boxes, shown, float(threshold), uncertain))
     return checked
 
 
@@ -142,7 +151,11 @@ def _page_start(selection, variants):
     )
     thresholds = "".join(
         f'<li>{escape(label)} <code>{threshold!r}</code></li>'
-        for label, _, _, threshold in variants
+        for label, _, _, threshold, _ in variants
+    )
+    uncertain_key = (
+        '<br><span class="swatch uncertain-key"></span>Серая зона: модель не уверена'
+        if any(x[-1] is not None for x in variants) else ""
     )
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
@@ -153,7 +166,7 @@ def _page_start(selection, variants):
 <header class="hero">
 <p class="eyebrow">OPENSCENE · CAM_F0 · ОФЛАЙН</p>
 <h1>Где модель видит машины</h1>
-<p>Один и тот же кадр для всех вариантов. Переключатель меняет только предсказанные рамки.</p>
+<p>Один и тот же кадр для всех вариантов. Переключатель меняет отображение прогноза.</p>
 <div class="stats">
 <div><b>{len(selection)}</b>записей</div>
 <div><b>{frame_count}</b>кадров в галерее</div>
@@ -162,7 +175,7 @@ def _page_start(selection, variants):
 </header>
 <aside class="key">
 <p><span class="swatch truth-key"></span>Эталон: проекция исходного 3D-бокса<br>
-<span class="swatch prediction-key"></span>Предсказание: оценка не ниже порога</p>
+<span class="swatch prediction-key"></span>Предсказание: оценка не ниже порога{uncertain_key}</p>
 <details><summary>Сохранённые пороги из dev</summary><ul>{thresholds}</ul></details>
 <p class="note">В каждой из четырёх вертикальных зон эталон отмечает ближайшую машину
 с подходящей аннотацией; пустая зона не доказывает отсутствие машины.
@@ -178,7 +191,7 @@ def _frame(index, sample, target, rgb, variants):
     sample_index = sample["source_list_index"]
     truth = [box for present, box in zip(target["presence"], target["boxes_2d"]) if present]
     buttons, overlays, counts = [], [], []
-    for variant, (label, boxes, shown, _) in enumerate(variants):
+    for variant, (label, boxes, shown, _, uncertain) in enumerate(variants):
         radio_id = f"frame-{index}-view-{variant}"
         selected = " checked" if variant == 0 else ""
         buttons.append(
@@ -187,9 +200,15 @@ def _frame(index, sample, target, rgb, variants):
         )
         predicted = boxes[index][shown[index]]
         visible = [part for box in predicted if (part := _visible_box(box)) is not None]
-        overlays.append(_overlay(f"prediction mode-{variant}", visible, "prediction-box"))
+        undecided = np.flatnonzero(uncertain[index]) if uncertain is not None else ()
+        bands = "".join(
+            _rect("uncertain-zone", (band / BAND_COUNT, 0, (band + 1) / BAND_COUNT, 1)) for band in undecided
+        )
+        overlays.append(_overlay(f"prediction mode-{variant}", visible, "prediction-box", bands))
         outside = len(predicted) - len(visible)
         note = f" · Вне кадра: {outside}" if outside else ""
+        if uncertain is not None:
+            note += f" · Не уверен: {len(undecided)} / {BAND_COUNT}"
         counts.append(
             f'<p class="switchable mode-{variant}">Эталон: {len(truth)} / 4 · '
             f'Предсказано: {len(predicted)} / 4{note}</p>'
@@ -255,6 +274,7 @@ main{max-width:1200px;margin:auto;padding:24px clamp(12px,4vw,32px) 44px}
 .key p{margin:0 0 .5em}.key .note{color:var(--muted);margin:.65em 0 0}
 .swatch{display:inline-block;vertical-align:middle;width:25px;margin-right:8px;border-radius:2px}
 .truth-key{border-top:3px dashed #aa6300}.prediction-key{border-top:3px solid #007459}
+.uncertain-key{border-top:5px solid #8395a2}.uncertain-zone{fill:#d0d8df;fill-opacity:.24;stroke:none}
 .key summary{color:#104e70;cursor:pointer}.key li{overflow-wrap:anywhere}
 .recording{margin:20px 0 30px}.recording h2{margin:0}.source{margin:.1em 0 .8em;color:var(--muted)}
 .frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,305px),1fr));gap:14px}
