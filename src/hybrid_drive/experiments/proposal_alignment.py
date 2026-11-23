@@ -6,42 +6,41 @@ import math
 import os
 from pathlib import Path
 
-import numpy as np
 import torch
-from torch import Tensor
-from torch.utils.data import DataLoader
 
 from hybrid_drive.assets.files import check_components
 from hybrid_drive.neural.grounded_loc_probe import (
     GroundedLocProbe,
-    fixed_quarter_boxes,
-    grounded_presence_scores,
     supervised_grounded_loc_loss,
 )
 from hybrid_drive.neural.losses import Reason2DriveLoss
 from hybrid_drive.neural.pretrained_alignment import load_grounded_alignment_backbones
 from hybrid_drive.neural.spatial_data import (
     SpatialAlignmentDataset,
-    collate_spatial_alignment,
     verify_spatial_splits,
 )
 from .bounded_io import decode_json, read_bounded, require_hex
+from .fresh_spatial_holdout import read_fresh_spatial_holdout
 from .io import write_json
-from .neural_checkpoint import load_neural_weights, module_state_hash, save_neural_weights
+from .localization_gallery import write_localization_gallery
+from .neural_checkpoint import module_state_hash, save_neural_weights
 from .proposal_alignment_report import write_proposal_report
+from .proposal_evaluation import (
+    CONDITIONS,
+    calibrate,
+    encode,
+    evaluate_direct_spatial,
+    evaluate_frozen,
+    paired_deltas,
+    predict,
+)
 from .proposal_prior_source import load_spatial_prior_source
 from .protocol import content_hash
 from .spatial_experiment import SPLIT_FRAMES
-from .spatial_metrics import (
-    SpatialPredictions,
-    calibrate_spatial_threshold,
-    shuffled_by_recording,
-    spatial_metrics,
-)
 
 
 SCOPE = "openscene_four_band_proposal_alignment_ablation_v1"
-CONDITIONS = ("fixed_quarters", "spatial_proposals")
+FRESH_SCOPE = "openscene_four_band_roi_memory_fresh_v1"
 LEARNING_RATE = 0.002
 
 
@@ -66,28 +65,6 @@ class ProposalRecipe:
         object.__setattr__(self, "seeds", seeds)
 
 
-@dataclass(frozen=True)
-class _Encoded:
-    features: Tensor
-    proposals: Tensor
-    presence: Tensor
-    target_boxes: Tensor
-    recordings: tuple[str, ...]
-
-    def __len__(self):
-        return len(self.recordings)
-
-    def batch(self, indices, condition, proposal_order=None):
-        features = self.features[indices]
-        if condition == "fixed_quarters":
-            boxes = fixed_quarter_boxes(features)
-        elif condition == "spatial_proposals":
-            boxes = self.proposals[indices if proposal_order is None else proposal_order[indices]]
-        else:
-            raise ValueError("Unknown proposal condition")
-        return features, boxes, self.presence[indices], self.target_boxes[indices]
-
-
 def run_proposal_alignment(
     data_root,
     model_root,
@@ -97,15 +74,21 @@ def run_proposal_alignment(
     revision,
     expected_prior_result_sha256,
     recipe=ProposalRecipe(),
+    fresh_holdout_root=None,
 ):
     require_hex(revision, 40, "revision")
     require_hex(expected_prior_result_sha256, 64, "expected prior result SHA256")
     if not isinstance(recipe, ProposalRecipe):
         raise ValueError("Expected ProposalRecipe")
-    root = _new_result_directory(results_root, (data_root, model_root, prior_run_root))
+    inputs = (data_root, model_root, prior_run_root)
+    fresh = fresh_holdout_root is not None
+    if fresh:
+        inputs += (fresh_holdout_root,)
+    root = _new_result_directory(results_root, inputs)
+    scope = FRESH_SCOPE if fresh else SCOPE
     manifest = {
         "schema": "hybrid-drive-proposal-alignment-v1",
-        "scope": SCOPE,
+        "scope": scope,
         "revision": revision,
         "recipe": asdict(recipe),
         "planned_frames": SPLIT_FRAMES.copy(),
@@ -120,13 +103,19 @@ def run_proposal_alignment(
         "torch_version": torch.__version__,
         "torch_threads": torch.get_num_threads(),
     }
-    result = {"status": "running", "scope": SCOPE, "revision": revision, "runs": []}
+    if fresh:
+        manifest.update(
+            memory_mode="roi_tokens",
+            holdout="pinned_fresh_recordings_open_labels_after_all_weights_and_dev_thresholds_frozen",
+            gallery_seed=recipe.seeds[0],
+        )
+    result = {"status": "running", "scope": scope, "revision": revision, "runs": []}
     trace = []
     write_json(root / "manifest.json", manifest)
     write_json(root / "result.json", result)
     try:
         with torch.random.fork_rng(devices=[]), torch.device("cpu"):
-            _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, trace)
+            _run(root, data_root, model_root, prior_run_root, fresh_holdout_root, recipe, manifest, result, trace)
         result["status"] = "passed"
     except KeyboardInterrupt:
         result.update(status="interrupted", error="Interrupted by operator")
@@ -162,7 +151,11 @@ def _new_result_directory(output, inputs):
     return root
 
 
-def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, trace):
+def _run(root, data_root, model_root, prior_run_root, fresh_root, recipe, manifest, result, trace):
+    fresh = read_fresh_spatial_holdout(data_root, fresh_root) if fresh_root is not None else None
+    memory_mode = manifest.get("memory_mode", "patches_and_priors")
+    if fresh is not None:
+        manifest["fresh_holdout_manifest_hash"] = fresh["manifest_hash"]
     datasets = {role: SpatialAlignmentDataset(data_root, role) for role in ("train", "dev")}
     verify_spatial_splits(datasets, SPLIT_FRAMES)
     dataset_hash = datasets["train"].dataset_hash
@@ -174,7 +167,7 @@ def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, 
         vision_provenance=provenance["vision"],
     )
     frozen = _frozen_backbone_states(vision, language)
-    encoded = {role: _encode(dataset, vision, prior, recipe.batch_size) for role, dataset in datasets.items()}
+    encoded = {role: encode(dataset, vision, prior, recipe.batch_size) for role, dataset in datasets.items()}
     manifest.update(dataset_hash=dataset_hash, backbones=provenance, prior_receipt=prior.receipt)
     write_json(root / "manifest.json", manifest)
     criterion = Reason2DriveLoss()
@@ -186,7 +179,7 @@ def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, 
         comparison_hash = None
         for condition in CONDITIONS:
             torch.manual_seed(seed)
-            model = GroundedLocProbe(language, visual_dim=vision.visual_dim)
+            model = GroundedLocProbe(language, visual_dim=vision.visual_dim, memory_mode=memory_mode)
             initial = module_state_hash(model)
             if comparison_hash is not None and comparison_hash != initial:
                 raise ValueError("Paired arms must begin at identical weights")
@@ -198,11 +191,11 @@ def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, 
             final = module_state_hash(model)
             if final == initial:
                 raise ValueError("The proposal-alignment weights did not update")
-            metrics, thresholds = _calibrate(
-                _predict(model, language, encoded["dev"], condition, recipe.batch_size)
+            metrics, thresholds = calibrate(
+                predict(model, language, encoded["dev"], condition, recipe.batch_size)
             )
             metadata = {
-                "scope": SCOPE,
+                "scope": manifest["scope"],
                 "dataset_hash": dataset_hash,
                 "revision": manifest["revision"],
                 "backbone_hash": content_hash(provenance),
@@ -211,6 +204,8 @@ def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, 
                 "seed": seed,
                 "train_order_hash": order_hash,
             }
+            if fresh is not None:
+                metadata.update(memory_mode=memory_mode, fresh_holdout_manifest_hash=fresh["manifest_hash"])
             filename = f"{condition}-seed-{seed}.safetensors"
             checkpoint = save_neural_weights(root / filename, model.weight_modules(), metadata=metadata)
             result["runs"].append(
@@ -229,15 +224,36 @@ def _run(root, data_root, model_root, prior_run_root, recipe, manifest, result, 
             del model
 
     thresholds = _freeze_before_holdout(root, manifest, result, encoded["dev"].recordings)
-    datasets["holdout"] = SpatialAlignmentDataset(data_root, "holdout")
-    verify_spatial_splits(datasets, SPLIT_FRAMES)
-    holdout = _encode(datasets["holdout"], vision, prior, recipe.batch_size)
+    if fresh is None:
+        datasets["holdout"] = SpatialAlignmentDataset(data_root, "holdout")
+        verify_spatial_splits(datasets, SPLIT_FRAMES)
+    else:
+        datasets["holdout"] = SpatialAlignmentDataset(
+            fresh_root, "holdout", expected_manifest_hash=fresh["manifest_hash"]
+        )
+    holdout = encode(datasets["holdout"], vision, prior, recipe.batch_size, capture_direct=fresh is not None)
     manifest["recordings"] = {role: sorted(set(dataset.recording_ids)) for role, dataset in datasets.items()}
-    _evaluate_frozen(root, result, vision.visual_dim, language, holdout, recipe.batch_size, thresholds)
+    gallery = evaluate_frozen(
+        root, result, vision.visual_dim, language, holdout, recipe.batch_size, thresholds,
+        memory_mode=memory_mode, gallery_seed=manifest.get("gallery_seed"),
+    )
+    if fresh is not None:
+        cutoff = prior.receipt["calibration"]["threshold"]
+        direct, evidence = evaluate_direct_spatial(holdout, cutoff)
+        result["direct_spatial"] = direct
+        target = root / "gallery.html"
+        write_localization_gallery(
+            target, fresh_root, fresh, {
+                "Прямая spatial-голова": evidence,
+                "Четыре полные четверти": gallery["fixed_quarters"],
+                "Четыре предсказанные RoI": gallery["spatial_proposals"],
+            },
+        )
+        result["gallery"] = target.name
     result["frozen_vision_and_language_unchanged"] = _frozen_backbone_states(vision, language) == frozen
     if not result["frozen_vision_and_language_unchanged"]:
         raise ValueError("Frozen backbones changed")
-    result["paired_holdout_deltas"] = _paired_deltas(result["runs"], recipe.seeds)
+    result["paired_holdout_deltas"] = paired_deltas(result["runs"], recipe.seeds)
 
 
 def _frozen_backbone_states(vision, language):
@@ -245,39 +261,6 @@ def _frozen_backbone_states(vision, language):
         if module.training or any(p.requires_grad or p.grad is not None for p in module.parameters()):
             raise ValueError("Vision and language backbones must remain frozen")
     return {"vision": module_state_hash(vision), "language": module_state_hash(language)}
-
-
-@torch.no_grad()
-def _encode(dataset, vision, prior, batch_size):
-    features, proposals, present, targets, seen, recordings = [], [], [], [], [], []
-    for batch in DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_spatial_alignment
-    ):
-        patches = vision(batch.images)
-        if (
-            patches.ndim != 5
-            or patches.shape[:3] != (len(batch.sample_ids), 1, vision.visual_dim)
-            or not torch.isfinite(patches).all()
-        ):
-            raise ValueError("Expected finite patch grids with unchanged sample order")
-        predicted = prior.predict(patches)
-        if (
-            predicted.shape != batch.boxes_2d.shape
-            or predicted.requires_grad
-            or not torch.isfinite(predicted).all()
-        ):
-            raise ValueError("Prior source must provide one finite box per ordered band without gradients")
-        features.append(patches)
-        proposals.append(predicted)
-        present.append(batch.presence)
-        targets.append(batch.boxes_2d)
-        seen.extend(batch.sample_ids)
-        recordings.extend(batch.recording_ids)
-    if tuple(seen) != dataset.sample_ids or tuple(recordings) != dataset.recording_ids:
-        raise ValueError("Data loader changed the prepared sample or recording order")
-    return _Encoded(
-        torch.cat(features), torch.cat(proposals), torch.cat(present), torch.cat(targets), tuple(recordings)
-    )
 
 
 def _train(root, model, language, criterion, train, condition, orders, batch_size, seed, trace):
@@ -338,43 +321,6 @@ def _finite_nonzero_norm(values):
     return norm
 
 
-@torch.no_grad()
-def _predict(model, language, encoded, condition, batch_size, proposal_order=None):
-    model.eval()
-    decoder_scores, language_scores, boxes = [], [], []
-    for indices in torch.arange(len(encoded)).split(batch_size):
-        features, rois, _, _ = encoded.batch(indices, condition, proposal_order)
-        validity, margin, decoded = grounded_presence_scores(model(features, rois, language), language)
-        decoder_scores.append(validity)
-        language_scores.append(margin)
-        boxes.append(decoded)
-    present, targets, boxes = encoded.presence.numpy(), encoded.target_boxes.numpy(), torch.cat(boxes).numpy()
-    return {
-        "decoder": SpatialPredictions(
-            torch.cat(decoder_scores).numpy(), present, boxes, targets, encoded.recordings
-        ),
-        "text": SpatialPredictions(
-            torch.cat(language_scores).numpy(), present, boxes, targets, encoded.recordings
-        ),
-    }
-
-
-def _metrics(predictions, thresholds):
-    output = {
-        key: spatial_metrics(values, thresholds[key]["threshold"]) for key, values in predictions.items()
-    }
-    for metrics in (output["text"], *output["text"]["per_recording"].values()):
-        for key in tuple(metrics):
-            if "iou" in key or "l2_image_fraction" in key:
-                del metrics[key]
-    return output
-
-
-def _calibrate(predictions):
-    thresholds = {key: calibrate_spatial_threshold(value) for key, value in predictions.items()}
-    return _metrics(predictions, thresholds), thresholds
-
-
 def _freeze_before_holdout(root, manifest, result, recordings):
     freeze = {
         "schema": "hybrid-drive-proposal-alignment-calibration-v1",
@@ -392,6 +338,9 @@ def _freeze_before_holdout(root, manifest, result, recordings):
             for row in result["runs"]
         ],
     }
+    if "fresh_holdout_manifest_hash" in manifest:
+        freeze["fresh_holdout_manifest_hash"] = manifest["fresh_holdout_manifest_hash"]
+        freeze["memory_mode"] = manifest["memory_mode"]
     write_json(root / "calibration.json", freeze)
     result["holdout_gate_hash"] = content_hash(freeze)
     write_json(root / "result.json", result)
@@ -399,69 +348,3 @@ def _freeze_before_holdout(root, manifest, result, recordings):
     if content_hash(persisted) != result["holdout_gate_hash"]:
         raise ValueError("The persisted dev calibration differs from the holdout gate")
     return {(row["seed"], row["condition"]): row["dev_thresholds"] for row in persisted["runs"]}
-
-
-def _evaluate_frozen(root, result, visual_dim, language, holdout, batch_size, thresholds):
-    order = torch.as_tensor(shuffled_by_recording(holdout.recordings), dtype=torch.long)
-    result["mismatched_proposal_fraction"] = float(
-        (holdout.proposals != holdout.proposals[order]).any(dim=-1).float().mean()
-    )
-    for row in result["runs"]:
-        restored = GroundedLocProbe(language, visual_dim=visual_dim).eval()
-        checkpoint = row["checkpoint"]
-        load_neural_weights(
-            root / checkpoint["file"],
-            restored.weight_modules(),
-            expected_sha256=checkpoint["sha256"],
-            expected_metadata=row["checkpoint_metadata"],
-        )
-        if module_state_hash(restored) != row["final_weights_hash"]:
-            raise ValueError("Reloaded alignment checkpoint differs from the frozen state")
-        row["checkpoint_state_bitwise_equal"] = True
-        condition = row["condition"]
-        cutoff = thresholds[(row["seed"], condition)]
-        predictions = _predict(restored, language, holdout, condition, batch_size)
-        row["holdout"] = _metrics(predictions, cutoff)
-        if condition == "spatial_proposals":
-            wrong_boxes = _predict(restored, language, holdout, condition, batch_size, order)
-            row["holdout_shuffled_rois_same_frame"] = _metrics(wrong_boxes, cutoff)
-            row["mean_absolute_score_change_on_proposal_shuffle"] = {
-                key: float(np.abs(values.scores - wrong_boxes[key].scores).mean())
-                for key, values in predictions.items()
-            }
-        write_json(root / "result.json", result)
-
-
-def _paired_deltas(rows, seeds):
-    def compare(left, right):
-        return {
-            section: {
-                key: (
-                    left[section][key] - right[section][key]
-                    if left[section][key] is not None and right[section][key] is not None
-                    else None
-                )
-                for key in keys
-            }
-            for section, keys in (
-                ("decoder", ("macro_balanced_accuracy", "macro_roc_auc", "macro_positive_iou")),
-                ("text", ("macro_balanced_accuracy", "macro_roc_auc")),
-            )
-        }
-
-    output = []
-    for seed in seeds:
-        fixed, proposals = [
-            next(row for row in rows if row["seed"] == seed and row["condition"] == condition)
-            for condition in CONDITIONS
-        ]
-        output.append(
-            {
-                "seed": seed,
-                "proposals_minus_fixed": compare(proposals["holdout"], fixed["holdout"]),
-                "proposals_minus_shuffled_rois": compare(
-                    proposals["holdout"], proposals["holdout_shuffled_rois_same_frame"]
-                ),
-            }
-        )
-    return output

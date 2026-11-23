@@ -24,7 +24,23 @@ def write_proposal_report(root, manifest, result):
         "<tr><th>Seed</th><th>Condition</th><th>Recording</th><th>Frames</th><th>Positive queries</th><th>Decoder BA</th>"
         "<th>Decoder ROC AUC</th><th>Box IoU</th><th>Yes/no BA</th><th>Yes/no ROC AUC</th></tr>"
     )
-    title = "Proposal alignment on the reused OpenScene reference"
+    isolated = manifest.get("memory_mode") == "roi_tokens"
+    if isolated:
+        title = "Fresh OpenScene holdout — four-token localization"
+        setup = ("Both trainable arms and the chosen gallery seed were declared before opening the final labels. "
+                 "The two arms use a four-token visual bank in both Q-Former and the decoder, with no direct "
+                 "full patch memory. Fixed full-height tiles cover the image; the second arm pools predicted RoIs.")
+        caveat = ("Two recordings were not used in the earlier project benchmarks. "
+                  "The direct spatial head uses its original dev cutoff. "
+                  "This is two-dimensional offline localization, not a driving or safety score.")
+    else:
+        title = "Proposal alignment on the reused OpenScene reference"
+        setup = ("Frozen DINO and Pythia. Both arms see the exact same whole-frame feature grid and same number "
+                 "of RoIs. The treatment uses four ordered proposals; the control uses full-height quarters.")
+        caveat = ("The two reference recordings were used in the earlier spatial study, not a fresh test set. "
+                  "Nothing here enables the runtime veto or evaluates driving safety.")
+    gallery = '<p><a href="gallery.html">Compare boxes on actual frames</a></p>' if result.get("gallery") else ""
+    direct = _direct_section(result.get("direct_spatial"))
     page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport"
 content="width=device-width,initial-scale=1"><title>{title}</title>
 <style>body{{font:16px system-ui;color:#192b43;background:#f5f8fc;max-width:1240px;margin:26px auto;padding:0 18px}}
@@ -32,12 +48,10 @@ h1,h2{{color:#1b4779}}section{{background:white;padding:18px;margin:16px 0;borde
 table{{border-collapse:collapse;width:100%}}td,th{{padding:8px;text-align:left;border-bottom:1px solid #dce6ef}}
 pre{{white-space:pre-wrap;overflow-wrap:anywhere}}.note{{background:#fff4dd;padding:12px;border-left:4px solid #af761b}}</style>
 <h1>{title}</h1>
-<p>Frozen DINO and Pythia. Both arms see the exact same whole-frame feature grid and same number of RoIs.
-The treatment uses four ordered proposals from the seed-0 spatial checkpoint, with no confidence gating.
-The control uses four fixed full-height quarters. Shuffling changes only RoIs, within each recording.</p>
-<p class="note">The two reference recordings were used in the earlier spatial study, not a fresh test set.
-Nothing here enables the runtime veto or evaluates driving safety. Token scores are yes/no comparisons after consumed LOC markers, not free-form answers.</p>
-<section><h2>Reference holdout — recording-macro metrics</h2>
+<p>{escape(setup)} Proposal shuffling changes only RoIs, within each recording.</p>
+<p class="note">{escape(caveat)} Token scores compare yes/no after consumed LOC markers, not free-form answers.</p>
+{gallery}{direct}
+<section><h2>Bridge holdout — recording-macro metrics</h2>
 <p>All weights and both dev thresholds per run are fixed before opening the reference labels.
 BA is balanced accuracy. Positive box IoU counts all positive labels, regardless of predicted presence.</p>
 <table><thead>{tests}</thead><tbody>{''.join(rows)}</tbody></table></section>
@@ -74,3 +88,20 @@ def _row(seed, label, metrics, recording=None):
 
 def _value(value):
     return "—" if value is None else f"{value:.4f}"
+
+
+
+def _direct_section(direct):
+    if direct is None:
+        return ""
+    rows = []
+    for label, key in (("Aligned image", "holdout"), ("Shuffled images", "holdout_shuffled_images_same_labels")):
+        data = direct[key]
+        cells = [label, _value(data["macro_balanced_accuracy"]), _value(data["macro_roc_auc"]),
+                 _value(data["macro_positive_iou"])]
+        rows.append("<tr>" + "".join(f"<td>{escape(x)}</td>" for x in cells) + "</tr>")
+    return ("<section><h2>Direct spatial head (no LLM)</h2>"
+            "<p>Same saved dev cutoff for both runs, no updates. Shuffled scores and boxes use a different "
+            "image from the same recording, with the original labels left in place.</p>"
+            "<table><thead><tr><th>Image condition</th><th>Balanced accuracy</th><th>ROC AUC</th><th>Box IoU</th>"
+            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></section>")

@@ -65,3 +65,51 @@ The summary records both metric channels, per-recording rows, paired deltas
 and gradients. Retain the report and calibration receipt alongside the saved
 states. This does not implement FSDrive priors or evaluate the 5 ms timeline
 of a runtime bridge.
+
+
+## Fresh holdout with isolated visual memories
+
+Prepare only the separate holdout in the pinned CPU image. Reuse the original
+spatial train/dev pack; do not expose the old reference as a final result.
+Use the official OpenScene mini camera shard 4 and the pinned metadata archive:
+
+    python -m scripts.prepare_spatial_sample \
+      --root /results/spatial-loc-fresh \
+      --sources scripts/spatial-loc-evaluation-sources.json \
+      --metadata-archive /sources/openscene_metadata_mini.tgz \
+      --camera-archive 4=/sources/openscene_sensor_mini_camera_4.tgz
+
+The new pack is bound to two recordings, 32 frames each. The experiment
+compares its recording, vehicle/date, and frame/JPEG/RGB identities against
+**all** original roles. The validated holdout manifest hash and all dev
+thresholds are saved before the final label reader is constructed. The
+label reader checks that exact manifest hash before reading target bytes.
+
+    python -m scripts.run_proposal_alignment \
+      --data-root /data --fresh-holdout-root /fresh --model-root /models \
+      --prior-run-root /prior --prior-result-sha256 '<trusted SHA256>' \
+      --output-root /results --revision '<tested git SHA>' \
+      --epochs 6 --batch-size 4 --seeds 0 1
+
+Both arms use precisely four pooled tokens in **both** Q-Former and the
+decoder. The frame-only control pools four fixed full-height tiles, covering
+the whole frame without predicted coordinates. The learned-region condition
+pools four predicted ROIs from the same DINO patch map. Neither arm passes
+the unpooled grid downstream. DINO and the proposal generator still use
+whole-frame context upstream. Fixed initialization, batch order, optimizer,
+bridge dimensions and input token count match within each seed.
+
+We keep the already-trained seed-0 spatial head as a direct no-LLM reference
+and use its **original** dev threshold without calibration on the two new
+recordings. The direct control shuffles the deterministic spatial outputs
+within each recording while keeping labels fixed; this is equivalent to
+shuffling source images before the frozen single-frame pipeline. For the
+bridge control only proposal coordinates are shifted to another frame; ROI
+tokens still pool from the current frame.
+
+Open the generated report for aggregate metrics and the linked local gallery
+for 12 uniformly chosen frames. The gallery always shows the first recipe
+seed; do not select it with final scores. It draws the reference projections
+and predictions above each saved decoder threshold. Frames, weights and
+per-frame annotations remain local. Neither metric nor visualization
+changes the driving agent or passes a production perception requirement.

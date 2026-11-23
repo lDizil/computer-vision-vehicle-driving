@@ -1,7 +1,7 @@
 from copy import deepcopy
 import hashlib
 import json
-from types import SimpleNamespace
+from dataclasses import replace
 
 import pytest
 import torch
@@ -267,7 +267,20 @@ def test_invalid_feature_values_fail_closed(archive):
 def test_invalid_probe_boxes_fail_closed(archive, monkeypatch, corrupt, error):
     source = archive.load()
     features = torch.zeros(1, 1, 384, 2, 4)
-    boxes = corrupt(source.predict(features))
-    monkeypatch.setattr(source._probe, "forward", lambda _: SimpleNamespace(boxes_xyxy=boxes))
+    reference = source.predict_spatial(features)
+    invalid = replace(reference, boxes_xyxy=corrupt(reference.boxes_xyxy))
+    monkeypatch.setattr(source._probe, "forward", lambda _: invalid)
     with pytest.raises(ValueError, match=error):
         source.predict(features)
+
+
+
+def test_direct_spatial_prediction_requires_finite_presence_logits(archive, monkeypatch):
+    prior = archive.load()
+    features = torch.zeros(1, 1, 384, 2, 4)
+    original = prior.predict_spatial(features)
+    torch.testing.assert_close(original.boxes_xyxy, prior.predict(features), atol=0, rtol=0)
+    invalid = replace(original, presence_logits=torch.full_like(original.presence_logits, float("nan")))
+    monkeypatch.setattr(prior._probe, "forward", lambda _: invalid)
+    with pytest.raises(ValueError, match="finite direct presence"):
+        prior.predict_spatial(features)

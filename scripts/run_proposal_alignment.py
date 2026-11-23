@@ -1,4 +1,4 @@
-"""Compare fixed and frozen spatial RoIs while keeping the whole-frame visual input unchanged."""
+"""Compare fixed and frozen spatial RoIs offline with or without direct patch memory."""
 
 import argparse
 from pathlib import Path
@@ -11,6 +11,10 @@ from hybrid_drive.experiments.proposal_alignment import ProposalRecipe, run_prop
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, required=True)
+    parser.add_argument(
+        "--fresh-holdout-root", type=Path,
+        help="pinned separate holdout; use only the four ROI tokens as visual memory and save a local gallery",
+    )
     parser.add_argument("--model-root", type=Path, required=True)
     parser.add_argument("--prior-run-root", type=Path, required=True)
     parser.add_argument("--prior-result-sha256", required=True)
@@ -29,6 +33,7 @@ def main(argv=None):
         revision=args.revision,
         expected_prior_result_sha256=args.prior_result_sha256,
         recipe=ProposalRecipe(args.epochs, args.batch_size, tuple(args.seeds)),
+        fresh_holdout_root=args.fresh_holdout_root,
     )
     print(f"{result['status']}: {directory / 'report.html'}")
     if result.get("error"):

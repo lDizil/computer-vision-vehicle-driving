@@ -25,17 +25,25 @@ class GroundedLocPrediction:
 class GroundedLocProbe(nn.Module):
     """Condition the causal prefix on four left-to-right ROIs in the current view.
 
-    Proposal geometry reaches the heads only through the latent prefix. Both
-    the bridge and the decoder also receive the unchanged full image memory.
+    In the default mode both bridge and decoder receive full image memory.
+    In the experimental ROI-token mode there is no direct patch-memory path:
+    both see the same four pooled region tokens.
     """
 
-    def __init__(self, language, *, visual_dim: int, hidden_dim: int = 64, num_queries: int = 4):
+    def __init__(
+        self, language, *, visual_dim: int, hidden_dim: int = 64, num_queries: int = 4,
+        memory_mode: str = "patches_and_priors",
+    ):
         super().__init__()
+        if memory_mode not in ("patches_and_priors", "roi_tokens"):
+            raise ValueError("Unknown grounded LOC memory mode")
+        self.memory_mode = memory_mode
         ids, _ = _fixed_prompt(language, 1)
         self.register_buffer("_prompt", ids[0].clone(), persistent=False)
         self.tokenizer = PriorTokenizer(
             visual_dim,
             geometry_dim=4,
+            token_dim=visual_dim if memory_mode == "roi_tokens" else 768,
             hidden_dim=hidden_dim,
             geometry_feature_names=("image_cx", "image_cy", "image_width", "image_height"),
         )
@@ -77,9 +85,13 @@ class GroundedLocProbe(nn.Module):
         expected_bands = torch.arange(_QUARTERS, device=boxes_xyxy.device).expand(batch, -1)
         if not torch.equal(bands, expected_bands):
             raise ValueError("Prior boxes must preserve left-to-right quarter order")
-        visual = features[:, 0].flatten(2).transpose(1, 2)
-        visual_mask = torch.ones(visual.shape[:2], device=visual.device, dtype=torch.bool)
-        prefix = self.projector(visual, visual_mask, priors.tokens, priors.valid_mask)
+        if self.memory_mode == "roi_tokens":
+            visual, visual_mask = priors.tokens, priors.valid_mask
+            prefix = self.projector(visual, visual_mask)
+        else:
+            visual = features[:, 0].flatten(2).transpose(1, 2)
+            visual_mask = torch.ones(visual.shape[:2], device=visual.device, dtype=torch.bool)
+            prefix = self.projector(visual, visual_mask, priors.tokens, priors.valid_mask)
         hidden, logits = language(prefix, ids)
         _require_logits(logits, ids, language)
         answer_mask = torch.zeros_like(ids, dtype=torch.bool).scatter_(1, positions, True)
