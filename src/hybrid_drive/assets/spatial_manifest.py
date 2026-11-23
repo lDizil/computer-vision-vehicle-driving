@@ -22,11 +22,13 @@ SPLITS = ("train", "dev", "holdout")
 BAND_COUNT = 4
 SOURCE_SCHEMA = "hybrid-drive-spatial-loc-sources-v1"
 EVALUATION_SOURCE_SCHEMA = "hybrid-drive-spatial-loc-evaluation-sources-v1"
+POLICY_EVALUATION_SOURCE_SCHEMA = "hybrid-drive-spatial-policy-evaluation-sources-v1"
 MANIFEST_NAME = "spatial-loc-manifest.json"
 MANIFEST_SCHEMA = "hybrid-drive-spatial-loc-data-v1"
 TARGET_SCHEMA = "hybrid-drive-spatial-loc-targets-v1"
 _SOURCE_HASH = "31028c73e338ad3ffb5047af0a9042c36950529bb15736ae0558abd55df84280"
 _EVALUATION_SOURCE_HASH = "73c19f6c0e65e2f505d0e03efa61dcda0b5128b59184b34d21aaed827907c949"
+_POLICY_EVALUATION_SOURCE_HASH = "88a8c417833e615494906abe92e0bd1b1d7d765aaf25c458b844c9cb09681657"
 _MAX_MANIFEST_BYTES = 512 * 1024
 _MAX_TARGET_BYTES = 128 * 1024
 
@@ -44,6 +46,8 @@ def validate_spatial_sources(sources):
         expected_hash, splits = _SOURCE_HASH, SPLITS
     elif schema == EVALUATION_SOURCE_SCHEMA:
         expected_hash, splits = _EVALUATION_SOURCE_HASH, ("holdout",)
+    elif schema == POLICY_EVALUATION_SOURCE_SCHEMA:
+        expected_hash, splits = _POLICY_EVALUATION_SOURCE_HASH, ("holdout",)
     else:
         raise PreparationError("Unknown spatial source schema")
     if digest_json(sources) != expected_hash:
