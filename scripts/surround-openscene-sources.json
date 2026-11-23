@@ -1,0 +1,81 @@
+{
+  "schema": "hybrid-drive-openscene-surround-sources-v1",
+  "rig_id": "openscene-v1.1-mini-six-selected-v1",
+  "capture_time": "openscene-associated-lidar-frame-no-camera-timestamp",
+  "license": {
+    "name": "CC-BY-NC-SA-4.0 with Motional dataset terms",
+    "url": "https://motional-nuplan.s3-ap-northeast-1.amazonaws.com/LICENSE"
+  },
+  "metadata_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be"
+  },
+  "camera_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_16.tgz",
+    "revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+    "size_bytes": 2903678609,
+    "sha256": "09fc68bca920dced27bf513eb9867f08f5f7d34e73733c99e9aaa31471bebc50",
+    "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+  },
+  "log": {
+    "log_name": "2021.10.06.17.43.07_veh-28_00508_00877",
+    "member": "openscene-v1.1/meta_datas/mini/2021.10.06.17.43.07_veh-28_00508_00877.pkl",
+    "size_bytes": 4832776,
+    "sha256": "d2a9b373da30670aaf327c2ab4ccc332e2b441be6cd5e3f72d77debd3adbcff3",
+    "frame_count": 738
+  },
+  "frame": {
+    "index": 0,
+    "token": "68b1d9f6bfbe5650",
+    "scene_token": "fb07ded137de59eb",
+    "timestamp_us": 1633542871299594
+  },
+  "native_size": [
+    1920,
+    1080
+  ],
+  "rectified_size": [
+    384,
+    216
+  ],
+  "cameras": [
+    {
+      "camera": "CAM_F0",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_F0/0ec2cc18901f55d6.jpg",
+      "size_bytes": 202199,
+      "sha256": "4bd0af044e319cc9b76a7fd8aced81e68999541d09e61edb8016191771acd7da"
+    },
+    {
+      "camera": "CAM_L0",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L0/c045ede31c51514a.jpg",
+      "size_bytes": 203401,
+      "sha256": "8f4d6b2452aace82a17a8d482a8f1619a2250b9a62098398163dd4837a4ee75c"
+    },
+    {
+      "camera": "CAM_R0",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R0/1e292e77d8a451ae.jpg",
+      "size_bytes": 108835,
+      "sha256": "765ddf75b94166ddeafd28d5576792b69953f98a17c1b99c98a47acc6ebcb478"
+    },
+    {
+      "camera": "CAM_L2",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_L2/c9c2bc02755a5c1a.jpg",
+      "size_bytes": 173370,
+      "sha256": "13b7ff0531833aa5b123b8b99d320829426878e4db9fe96f3c3c08354734ab98"
+    },
+    {
+      "camera": "CAM_R2",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_R2/6c53c9d75942594f.jpg",
+      "size_bytes": 196662,
+      "sha256": "2e8303cf80f6b562357a0d1519f91aee76b54fd1c934343a285d10d1c4154684"
+    },
+    {
+      "camera": "CAM_B0",
+      "member": "openscene-v1.1/sensor_blobs/mini/2021.10.06.17.43.07_veh-28_00508_00877/CAM_B0/edf7677401625903.jpg",
+      "size_bytes": 184528,
+      "sha256": "74eb2ee3904368aa573419e1c3ceeb36ac6aacf73b5f6bf5201c9e1f5749d7e5"
+    }
+  ]
+}
