@@ -1,9 +1,10 @@
 """Associate observed boxes in source time; no interpolation or new detections."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 import math
+from numbers import Real
 from types import MappingProxyType
 from typing import Literal
 
@@ -18,7 +19,11 @@ _AMBIGUITY_MARGIN = 0.04
 _DORMANT_COST = 0.05
 _MAX_CENTER_SPEED = 0.35  # normalized image units per second, not vehicle velocity
 _MAX_PREDICT_S = 1.0
+_MAX_APPEARANCE_DIM = 4096
+_NO_APPEARANCE = (None,) * 4
 
+Embedding = tuple[float, ...]
+Appearance = tuple[Embedding | None, Embedding | None, Embedding | None, Embedding | None]
 TrackIds = tuple[int | None, int | None, int | None, int | None]
 
 
@@ -83,28 +88,41 @@ class _Track:
     timestamp_us: int
     velocity: tuple[float, float] | None = None
     dormant: bool = False
+    appearance: Embedding | None = None
 
 
 class VehicleTracker:
     """Causal bounded tracker for one clip; IDs are local to that clip."""
 
-    def __init__(self, recipe: TrackingRecipe):
+    def __init__(self, recipe: TrackingRecipe, *, appearance_weight: float = 0.0):
         if not isinstance(recipe, TrackingRecipe):
             raise ValueError("Expected a TrackingRecipe")
         self._recipe = recipe
+        self._appearance_weight = _checked_weight(appearance_weight)
+        self._appearance_dim: int | None = None
         self._tracks: tuple[_Track, ...] = ()
         self._previous: FrameDecision | None = None
         self._next_id = 1
 
-    def push(self, decision: FrameDecision) -> TrackedFrame:
+    def push(self, decision: FrameDecision, *, appearance: Appearance | None = None) -> TrackedFrame:
+        """Accept embeddings in the current decision's four original band slots."""
         if not isinstance(decision, FrameDecision):
             raise TemporalInputError("invalid_decision", "Expected a FrameDecision")
+        features, dimension = _checked_appearance(appearance, decision, self._appearance_dim)
+        output = self._push(decision, features)
+        self._appearance_dim = dimension
+        return output
+
+    def _push(self, decision: FrameDecision, features: Appearance) -> TrackedFrame:
         continuous = self._check_next(decision)
         frame = decision.observation
         present = tuple(band for band, state in enumerate(decision.states) if state == PRESENT)
         previous = self._tracks if continuous else ()
 
         edges = _association_edges(previous, present, decision, self._recipe)
+        by_id = {track.track_id: track for track in previous}
+        if self._appearance_weight:
+            edges = _appearance_costs(edges, by_id, features, self._appearance_weight)
         ambiguous = set()
         if self._recipe.reject_ambiguous:
             original = edges
@@ -114,7 +132,6 @@ class VehicleTracker:
         assignments = _assign(edges, present)
 
         next_id = self._next_id
-        by_id = {track.track_id: track for track in previous}
         used_ids = set()
         active = []
         ids: list[int | None] = [None] * 4
@@ -123,7 +140,7 @@ class VehicleTracker:
             track = by_id.get(assignments.get(band))
             box = decision.boxes[band]
             if track is None:
-                tracked = _Track(next_id, band, box, frame.timestamp_us)
+                tracked = _Track(next_id, band, box, frame.timestamp_us, appearance=features[band])
                 next_id += 1
                 reason = "ambiguous_new_track" if band in ambiguous else "new_track"
             else:
@@ -131,6 +148,7 @@ class VehicleTracker:
                 tracked = _Track(
                     track.track_id, band, box, frame.timestamp_us,
                     _observed_velocity(track, box, frame.timestamp_us) if self._recipe.method == "motion" else None,
+                    appearance=features[band],
                 )
                 reason = _link_reason(track, band)
             active.append(tracked)
@@ -148,7 +166,7 @@ class VehicleTracker:
                 ):
                     active.append(_Track(
                         track.track_id, track.band, track.box, track.timestamp_us,
-                        track.velocity, dormant=True,
+                        track.velocity, dormant=True, appearance=track.appearance,
                     ))
 
         output = TrackedFrame(decision, tuple(ids), tuple(reasons))
@@ -177,10 +195,18 @@ class VehicleTracker:
         )
 
 
-def replay_vehicle_tracks(decisions: Sequence[FrameDecision], recipe: TrackingRecipe) -> tuple[TrackedFrame, ...]:
-    """Keep original decisions, resetting the identity namespace at each clip cut."""
+def replay_vehicle_tracks(
+    decisions: Sequence[FrameDecision], recipe: TrackingRecipe, *,
+    appearance_by_sample: Mapping[str, Appearance | None] | None = None, appearance_weight: float = 0.0,
+) -> tuple[TrackedFrame, ...]:
+    """Track original decisions; optional descriptors must cover the exact sample namespace."""
     if not isinstance(recipe, TrackingRecipe):
         raise ValueError("Expected a TrackingRecipe")
+    weight = _checked_weight(appearance_weight)
+    prepared = None
+    if appearance_by_sample is not None:
+        decisions = tuple(decisions)
+        prepared = _prepare_appearance(decisions, appearance_by_sample)
     tracker = None
     previous = None
     recording_ids, clip_keys, sample_ids = set(), set(), set()
@@ -203,10 +229,89 @@ def replay_vehicle_tracks(decisions: Sequence[FrameDecision], recipe: TrackingRe
                 recording_ids.add(obs.recording_id)
             elif obs.source_index <= previous.source_index or obs.timestamp_us <= previous.timestamp_us:
                 raise TemporalInputError("chronology", "Source time must advance between clips in a recording")
-            tracker = VehicleTracker(recipe)
-        outputs.append(tracker.push(decision))
+            tracker = VehicleTracker(recipe, appearance_weight=weight)
+        if prepared is None:
+            outputs.append(tracker.push(decision))
+        else:
+            outputs.append(tracker._push(decision, prepared[obs.sample_id]))
         previous = obs
     return tuple(outputs)
+
+
+def _checked_weight(value):
+    if not isinstance(value, Real) or isinstance(value, bool) or not 0 <= value <= 1:
+        raise ValueError("Expected an appearance weight between zero and one")
+    return float(value)
+
+
+def _checked_appearance(row, decision, dimension):
+    if row is None:
+        return _NO_APPEARANCE, dimension
+    if not isinstance(row, (list, tuple)) or len(row) != 4:
+        raise TemporalInputError("invalid_appearance", "Expected exactly four appearance slots")
+    checked = []
+    for state, vector in zip(decision.states, row):
+        if vector is None:
+            checked.append(None)
+            continue
+        if state != PRESENT:
+            raise TemporalInputError("invalid_appearance", "Only a PRESENT slot may carry appearance")
+        if not isinstance(vector, (list, tuple)) or not 1 <= len(vector) <= _MAX_APPEARANCE_DIM:
+            raise TemporalInputError("invalid_appearance", "Expected a bounded nonempty appearance vector")
+        if dimension is not None and len(vector) != dimension:
+            raise TemporalInputError("invalid_appearance", "Appearance dimension changed")
+        checked.append(_unit_embedding(vector))
+        dimension = len(vector)
+    return tuple(checked), dimension
+
+
+def _unit_embedding(vector):
+    if any(not isinstance(value, Real) or isinstance(value, bool) for value in vector):
+        raise TemporalInputError("invalid_appearance", "Appearance values must be finite real numbers")
+    try:
+        values = tuple(map(float, vector))
+    except OverflowError:
+        raise TemporalInputError("invalid_appearance", "Appearance values must be finite") from None
+    if not all(map(math.isfinite, values)):
+        raise TemporalInputError("invalid_appearance", "Appearance values must be finite")
+    scale = max(map(abs, values))
+    if scale == 0:
+        raise TemporalInputError("invalid_appearance", "Appearance vectors must be nonzero")
+    # Scale before normalizing to handle both very small and very large inputs.
+    scaled = tuple(value / scale for value in values)
+    norm = math.hypot(*scaled)
+    return tuple(value / norm for value in scaled)
+
+
+def _prepare_appearance(decisions, rows):
+    if not isinstance(rows, Mapping):
+        raise TemporalInputError("invalid_appearance", "Appearance must be indexed by sample ID")
+    if any(not isinstance(decision, FrameDecision) for decision in decisions):
+        raise TemporalInputError("invalid_decision", "Expected a FrameDecision")
+    ids = tuple(decision.observation.sample_id for decision in decisions)
+    if len(set(ids)) != len(ids):
+        raise TemporalInputError("chronology", "Duplicate sample ID in tracking replay")
+    if set(rows) != set(ids):
+        raise TemporalInputError("invalid_appearance", "Appearance sample IDs differ from the replay")
+    checked, dimension = {}, None
+    for decision, sample_id in zip(decisions, ids):
+        checked[sample_id], dimension = _checked_appearance(rows[sample_id], decision, dimension)
+    return checked
+
+
+def _appearance_costs(edges, tracks, current, weight):
+    # Uniform fallback across the entire frame prevents usable descriptors
+    # on some edges from competing against incomparable geometry-only costs.
+    if any(tracks[track_id].appearance is None or current[band] is None for track_id, band in edges):
+        return edges
+    return {
+        (track_id, band): cost - weight * _cosine(tracks[track_id].appearance, current[band])
+        for (track_id, band), cost in edges.items()
+    }
+
+
+def _cosine(a, b):
+    return min(1.0, max(-1.0, math.fsum(x * y for x, y in zip(a, b))))
 
 
 def _association_edges(previous, present, decision, recipe):
