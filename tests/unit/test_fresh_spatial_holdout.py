@@ -2,6 +2,7 @@ import copy
 
 import pytest
 
+from hybrid_drive.assets.spatial_manifest import POLICY_EVALUATION_SOURCE_SCHEMA
 from hybrid_drive.experiments import fresh_spatial_holdout as holdout
 
 
@@ -37,7 +38,12 @@ def _manifests():
         "sources": {**protocol, "schema": holdout.EVALUATION_SOURCE_SCHEMA},
         "splits": {"holdout": {"recordings": [_recording(6, 1, 3), _recording(7, 1, 4)]}},
     }
-    return {"reference": reference, "fresh": fresh}
+    policy = {
+        "manifest_hash": "policy",
+        "sources": {**protocol, "schema": POLICY_EVALUATION_SOURCE_SCHEMA},
+        "splits": {"holdout": {"recordings": [_recording(8, 1, 5), _recording(9, 1, 6)]}},
+    }
+    return {"reference": reference, "fresh": fresh, "policy": policy}
 
 
 @pytest.fixture
@@ -77,6 +83,55 @@ def test_rejects_different_target_definition(manifests):
     with pytest.raises(ValueError, match="target protocol"):
         holdout.read_fresh_spatial_holdout("reference", "fresh")
 
+
+
+def _read_policy():
+    return holdout.read_fresh_spatial_holdout(
+        "reference", "policy", expected_schema=POLICY_EVALUATION_SOURCE_SCHEMA,
+        previously_seen_roots=("fresh",),
+    )
+
+
+def test_admits_policy_holdout_distinct_from_reference_and_previous_holdout(manifests):
+    assert _read_policy() is manifests["policy"]
+
+
+def test_cannot_exchange_the_calibration_and_policy_holdout_packs(manifests):
+    with pytest.raises(ValueError, match="pinned holdout-only pack"):
+        holdout.read_fresh_spatial_holdout("reference", "policy")
+    with pytest.raises(ValueError, match="pinned holdout-only pack"):
+        holdout.read_fresh_spatial_holdout(
+            "reference", "fresh", expected_schema=POLICY_EVALUATION_SOURCE_SCHEMA,
+        )
+
+
+def test_rejects_reusing_the_same_manifest_as_a_seen_pack(manifests):
+    with pytest.raises(ValueError, match="different from the previously seen pack"):
+        holdout.read_fresh_spatial_holdout(
+            "reference", "policy", expected_schema=POLICY_EVALUATION_SOURCE_SCHEMA,
+            previously_seen_roots=("fresh", "policy"),
+        )
+
+
+def test_rejects_a_group_from_the_previous_holdout(manifests):
+    recording = manifests["policy"]["splits"]["holdout"]["recordings"][0]
+    recording["recording_id"] = "2021.06.06.13.00.00_veh-1"
+    with pytest.raises(ValueError, match="previously seen pack by date and vehicle"):
+        _read_policy()
+
+
+@pytest.mark.parametrize(("kind", "field"), [("jpeg", "sha256"), ("rgb", "pixels_sha256")])
+def test_rejects_reused_image_content_from_the_previous_holdout(manifests, kind, field):
+    earlier = manifests["fresh"]["splits"]["holdout"]["recordings"][0]["samples"][0]
+    manifests["policy"]["splits"]["holdout"]["recordings"][0]["samples"][0][kind][field] = earlier[kind][field]
+    with pytest.raises(ValueError, match="previously seen pack by .* digest"):
+        _read_policy()
+
+
+def test_rejects_a_seen_pack_using_a_different_camera_protocol(manifests):
+    manifests["fresh"]["sources"]["rgb"] = "different"
+    with pytest.raises(ValueError, match="target protocol of the previously seen pack"):
+        _read_policy()
 
 
 def test_frozen_manifest_mismatch_stops_before_opening_targets(monkeypatch):

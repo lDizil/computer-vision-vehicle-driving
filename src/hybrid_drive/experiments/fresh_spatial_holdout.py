@@ -7,36 +7,42 @@ from hybrid_drive.assets.spatial_manifest import (
 )
 
 
-def read_fresh_spatial_holdout(reference_root, fresh_root):
+def read_fresh_spatial_holdout(
+    reference_root, fresh_root, *, expected_schema=EVALUATION_SOURCE_SCHEMA, previously_seen_roots=(),
+):
+    """Match the requested pinned source and check its identities against every earlier pack."""
     reference = read_spatial_manifest(reference_root)
     fresh = read_spatial_manifest(fresh_root)
-    _verify_distinct(reference, fresh)
-    return fresh
-
-
-def _verify_distinct(reference, fresh):
-    old, new = reference["sources"], fresh["sources"]
     if (
         set(reference["splits"]) != set(SPLITS)
         or set(fresh["splits"]) != {"holdout"}
-        or new["schema"] != EVALUATION_SOURCE_SCHEMA
+        or fresh["sources"]["schema"] != expected_schema
     ):
         raise ValueError("Expected the complete original pack and a separate pinned holdout-only pack")
-    if reference["manifest_hash"] == fresh["manifest_hash"]:
-        raise ValueError("Holdout manifest must be different from the original pack")
-    scope = ("dataset", "openscene_revision", "navsim_revision", "nuplan_revision", "rgb", "loc", "selection")
-    if any(old[key] != new[key] for key in scope):
-        raise ValueError("Fresh holdout must preserve the source, image and target protocol")
 
     current = fresh["splits"]["holdout"]["recordings"]
     if len(current) != 2 or any(len(recording["samples"]) != 32 for recording in current):
         raise ValueError("Fresh holdout must keep the full two-recording, 64-frame selection")
-    earlier = [row for partition in reference["splits"].values() for row in partition["recordings"]]
+
     present = _identities(current)
+    _verify_distinct(reference, fresh, present, "original pack")
+    for root in previously_seen_roots:
+        _verify_distinct(read_spatial_manifest(root), fresh, present, "previously seen pack")
+    return fresh
+
+
+def _verify_distinct(previous, fresh, present, role):
+    if previous["manifest_hash"] == fresh["manifest_hash"]:
+        raise ValueError(f"Holdout manifest must be different from the {role}")
+    scope = ("dataset", "openscene_revision", "navsim_revision", "nuplan_revision", "rgb", "loc", "selection")
+    if any(previous["sources"][key] != fresh["sources"][key] for key in scope):
+        raise ValueError(f"Fresh holdout must preserve the source, image and target protocol of the {role}")
+
+    earlier = [row for partition in previous["splits"].values() for row in partition["recordings"]]
     original = _identities(earlier)
     for label, values in present.items():
         if values.intersection(original[label]):
-            raise ValueError(f"Fresh holdout overlaps the original pack by {label}")
+            raise ValueError(f"Fresh holdout overlaps the {role} by {label}")
 
 
 def _identities(recordings):

@@ -23,6 +23,7 @@ from hybrid_drive.neural.spatial_data import SpatialAlignmentDataset, collate_sp
 
 SOURCES = Path(__file__).resolve().parents[2] / "scripts" / "spatial-loc-sources.json"
 EVALUATION_SOURCES = SOURCES.with_name("spatial-loc-evaluation-sources.json")
+POLICY_EVALUATION_SOURCES = SOURCES.with_name("spatial-loc-policy-evaluation-sources.json")
 ROTATION = [[0, 0, 1], [-1, 0, 0], [0, -1, 0]]
 INTRINSIC = [[112, 0, 111.5], [0, 112, 111.5], [0, 0, 1]]
 
@@ -47,11 +48,14 @@ def fixed_archives(tmp_path, monkeypatch):
     return _fixed_archives(tmp_path, monkeypatch, SOURCES, "_SOURCE_HASH")
 
 
-@pytest.fixture()
-def evaluation_archives(tmp_path, monkeypatch):
+@pytest.fixture(params=[
+    (EVALUATION_SOURCES, "_EVALUATION_SOURCE_HASH"),
+    (POLICY_EVALUATION_SOURCES, "_POLICY_EVALUATION_SOURCE_HASH"),
+], ids=["previous", "policy"])
+def evaluation_archives(tmp_path, monkeypatch, request):
     archives = tmp_path / "evaluation-fixture"
     archives.mkdir()
-    return _fixed_archives(archives, monkeypatch, EVALUATION_SOURCES, "_EVALUATION_SOURCE_HASH")
+    return _fixed_archives(archives, monkeypatch, *request.param)
 
 
 def _fixed_archives(tmp_path, monkeypatch, source_path, hash_attr):
@@ -286,13 +290,17 @@ def test_rejects_posthoc_symlink_traversal_and_rgb_corruption(fixed_archives):
 
 
 
-def test_evaluation_source_is_pinned_to_one_shard_and_two_holdout_recordings():
-    sources = load_spatial_sources(EVALUATION_SOURCES)
+@pytest.mark.parametrize(("path", "shard", "recordings"), [
+    (EVALUATION_SOURCES, 4, ("2021.06.09.17.23.18_veh-38", "2021.08.24.13.12.55_veh-45")),
+    (POLICY_EVALUATION_SOURCES, 19, ("2021.06.23.16.54.19_veh-35", "2021.08.09.17.55.59_veh-28")),
+], ids=["previous", "policy"])
+def test_evaluation_source_is_pinned_to_one_shard_and_two_holdout_recordings(path, shard, recordings):
+    sources = load_spatial_sources(path)
     assert spatial_manifest.validate_spatial_sources(sources) == ("holdout",)
-    assert set(sources["camera_archives"]) == {"4"}
+    assert set(sources["camera_archives"]) == {str(shard)}
     assert [(log["recording_id"], log["camera_shard"], log["sample_count"])
             for log in sources["logs"]["holdout"]] == [
-        ("2021.06.09.17.23.18_veh-38", 4, 32), ("2021.08.24.13.12.55_veh-45", 4, 32),
+        (recording, shard, 32) for recording in recordings
     ]
     sources["logs"]["holdout"][0]["sample_count"] -= 1
     with pytest.raises(PreparationError, match="pinned recordings and protocol"):
