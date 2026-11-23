@@ -45,7 +45,10 @@ _JSON_ESCAPES = str.maketrans({
 })
 
 
-def write_temporal_spatial_gallery(path, pack, targets, outcomes, *, selected_name):
+def write_temporal_spatial_gallery(
+    path, pack, targets, outcomes, *, selected_name, baseline_name=_BASELINE,
+    mode_labels=None, truth_ids=None, predicted_ids=None,
+):
     """Publish a complete comparison of untouched final frames, not model output footage.
 
     The caller supplies verified per-frame reference targets and decisions. Each
@@ -61,9 +64,21 @@ def write_temporal_spatial_gallery(path, pack, targets, outcomes, *, selected_na
         raise FileExistsError(f"Temporal gallery already exists: {path}")
 
     frames, layout = _layout(pack.frames)
-    modes, decisions = _checked_modes(outcomes, selected_name, len(frames))
+    modes, decisions = _checked_modes(outcomes, selected_name, len(frames), baseline_name)
     if not isinstance(targets, Mapping) or set(targets) != {frame.sample_id for frame in frames}:
         raise ValueError("Temporal gallery needs one reference target per exact final frame")
+
+    tracking = truth_ids is not None or predicted_ids is not None
+    if tracking:
+        if (
+            not isinstance(truth_ids, Mapping) or set(truth_ids) != set(targets)
+            or not isinstance(predicted_ids, Mapping) or set(predicted_ids) != set(modes)
+            or any(not isinstance(seq, Sequence) or len(seq) != len(frames) for seq in predicted_ids.values())
+        ):
+            raise ValueError("Tracking labels must cover every exact frame and mode")
+    names = _MODE_LABELS if mode_labels is None else mode_labels
+    if not isinstance(names, Mapping) or any(not _valid_text(names.get(key, key), limit=128) for key in modes):
+        raise ValueError("Gallery mode labels must be bounded text")
 
     # Fail before opening any images if even an undisplayed mode has stale evidence.
     clips = []
@@ -71,22 +86,29 @@ def write_temporal_spatial_gallery(path, pack, targets, outcomes, *, selected_na
         first = rows[0][1].timestamp_us
         items = []
         for index, frame in rows:
-            items.append({
+            item = {
                 "sample": frame.sample_id,
                 "index": frame.source_index,
                 "offset_us": frame.timestamp_us - first,
                 "truth": _target_overlay(targets[frame.sample_id]),
                 "predictions": [_prediction_overlay(mode[index], frame) for mode in decisions],
-            })
+            }
+            if tracking:
+                item["track_truth"] = _display_ids(truth_ids[frame.sample_id], item["truth"], "G")
+                for name, result in zip(modes, item["predictions"]):
+                    result["track_labels"] = _display_ids(predicted_ids[name][index], result["boxes"], "P")
+            items.append(item)
         clips.append({"recording": recording, "clip": clip, "frames": items})
 
     payload = {
         "schema": "mv-temporal-gallery-v1",
-        "baseline": _BASELINE,
+        "baseline": baseline_name,
         "selected": selected_name,
-        "modes": [{"id": key, "label": _MODE_LABELS.get(key, key)} for key in modes],
+        "modes": [{"id": key, "label": names.get(key, key)} for key in modes],
         "clips": clips,
     }
+    if tracking:
+        payload["tracking"] = True
     out_frames = [frame for clip in clips for frame in clip["frames"]]
     for frame, view in zip(frames, out_frames):
         view["image"] = _jpeg_uri(read_spatial_rgb(root, frame.rgb))
@@ -141,14 +163,18 @@ def _layout(values):
     return frames, blocks
 
 
-def _checked_modes(outcomes, selected, frame_count):
+def _checked_modes(outcomes, selected, frame_count, baseline):
     if not isinstance(outcomes, Mapping) or not 1 <= len(outcomes) <= _MAX_MODES:
         raise ValueError("Temporal gallery mode count must fit the input scope")
-    if not isinstance(selected, str) or _BASELINE not in outcomes or selected not in outcomes:
-        raise ValueError("Temporal gallery requires both the framewise and selected modes")
+    if (
+        not isinstance(selected, str) or not isinstance(baseline, str)
+        or baseline not in outcomes or selected not in outcomes
+    ):
+        missing_baseline = "framewise" if baseline == _BASELINE else "baseline"
+        raise ValueError(f"Temporal gallery requires both the {missing_baseline} and selected modes")
     if any(not _valid_text(key, limit=64) for key in outcomes):
         raise ValueError("Temporal gallery modes must have nonempty bounded names")
-    names = [_BASELINE, *(name for name in outcomes if name != _BASELINE)]
+    names = [baseline, *(name for name in outcomes if name != baseline)]
     modes = [outcomes[name] for name in names]
     if any(not isinstance(rows, Sequence) or len(rows) != frame_count for rows in modes):
         raise ValueError("Every temporal gallery mode must cover the full ordered pack")
@@ -206,6 +232,24 @@ def _prediction_overlay(decision, ref):
         "reasons": reasons,
         "reset": reset,
     }
+
+
+def _display_ids(labels, boxes, prefix):
+    labels = _four(labels, "tracking labels")
+    seen = set()
+    for label, box in zip(labels, boxes):
+        if (label is not None) != (box is not None):
+            raise ValueError("Each displayed box must carry exactly its own tracking label")
+        if label is None:
+            continue
+        if (
+            not isinstance(label, str) or not 2 <= len(label) <= 7 or label[0] != prefix
+            or not label[1:].isascii() or not label[1:].isdigit() or label[1] == "0"
+            or label in seen
+        ):
+            raise ValueError("Invalid or duplicate display track identity")
+        seen.add(label)
+    return labels
 
 
 def _four(values, name):
