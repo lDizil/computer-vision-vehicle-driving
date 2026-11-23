@@ -47,27 +47,13 @@ def prepare_openscene_camera(
     they are not camera-to-physical-LiDAR transforms. No capture timestamp or
     motion compensation is inferred from these calibration parameters.
     """
-    if not isinstance(profile, str) or profile != OPENSCENE_NATIVE_PROFILE:
-        raise ValueError("Unknown original OpenScene camera profile")
-    if not isinstance(name, str) or name not in CAMERA_NAMES:
-        raise ValueError("Camera name must be CAM_L0, CAM_F0 or CAM_R0")
-    width = _output_dimension(width, "width", MAX_WIDTH)
-    height = _output_dimension(height, "height", MAX_HEIGHT)
+    width, height = _rectified_size(name, profile, width, height)
     _validate_rgb(rgb)
     native_height, native_width = rgb.shape[:2]
-    if native_width * native_height > _MAX_NATIVE_PIXELS:
-        raise ValueError("Native camera image exceeds 16 megapixels")
-    rotation = _finite_array(camera_to_ego_rotation, (3, 3), "camera_to_ego_rotation")
-    translation = _finite_array(camera_to_ego_translation, (3,), "camera_to_ego_translation")
-    distortion = _finite_array(distortion, (5,), "distortion")
-    transform = np.eye(4)
-    transform[:3, :3] = rotation.T
-    with np.errstate(over="ignore", invalid="ignore"):
-        transform[:3, 3] = -rotation.T @ translation
-    native_calibration = CameraCalibration(name, native_width, native_height, intrinsic, transform)
-    if native_calibration.intrinsic[0, 1] != 0:
-        raise ValueError("OpenScene native rectification requires zero-skew intrinsics")
-    calibration = native_calibration.resized(width, height)
+    native_calibration, calibration, distortion = _openscene_calibrations(
+        name, native_width, native_height, intrinsic, camera_to_ego_rotation,
+        camera_to_ego_translation, distortion, width, height,
+    )
 
     import cv2
     from PIL import Image
@@ -80,6 +66,48 @@ def prepare_openscene_camera(
                           borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
     resized = Image.fromarray(rectified).resize((width, height), resample=Image.Resampling.BILINEAR)
     return CalibratedView(CameraFrame(name, np.asarray(resized)), calibration)
+
+
+def openscene_camera_calibrations(
+    name: str, native_width: int, native_height: int, intrinsic: ArrayLike,
+    camera_to_ego_rotation: ArrayLike, camera_to_ego_translation: ArrayLike, distortion: ArrayLike,
+    *, profile: str, width: int = 384, height: int = 216,
+) -> tuple[CameraCalibration, CameraCalibration, NDArray[np.float64]]:
+    """Return the same-K native/resized calibration and distortion without processing RGB."""
+    width, height = _rectified_size(name, profile, width, height)
+    native_width = _output_dimension(native_width, "native_width", _MAX_NATIVE_PIXELS)
+    native_height = _output_dimension(native_height, "native_height", _MAX_NATIVE_PIXELS)
+    return _openscene_calibrations(
+        name, native_width, native_height, intrinsic, camera_to_ego_rotation,
+        camera_to_ego_translation, distortion, width, height,
+    )
+
+
+def _rectified_size(name, profile, width, height):
+    if not isinstance(profile, str) or profile != OPENSCENE_NATIVE_PROFILE:
+        raise ValueError("Unknown original OpenScene camera profile")
+    if not isinstance(name, str) or name not in CAMERA_NAMES:
+        raise ValueError("Camera name must be CAM_L0, CAM_F0 or CAM_R0")
+    return _output_dimension(width, "width", MAX_WIDTH), _output_dimension(height, "height", MAX_HEIGHT)
+
+
+def _openscene_calibrations(
+    name, native_width, native_height, intrinsic, camera_to_ego_rotation,
+    camera_to_ego_translation, distortion, width, height,
+):
+    if native_width * native_height > _MAX_NATIVE_PIXELS:
+        raise ValueError("Native camera image exceeds 16 megapixels")
+    rotation = _finite_array(camera_to_ego_rotation, (3, 3), "camera_to_ego_rotation")
+    translation = _finite_array(camera_to_ego_translation, (3,), "camera_to_ego_translation")
+    distortion = _finite_array(distortion, (5,), "distortion")
+    transform = np.eye(4)
+    transform[:3, :3] = rotation.T
+    with np.errstate(over="ignore", invalid="ignore"):
+        transform[:3, 3] = -rotation.T @ translation
+    native_calibration = CameraCalibration(name, native_width, native_height, intrinsic, transform)
+    if native_calibration.intrinsic[0, 1] != 0:
+        raise ValueError("OpenScene native rectification requires zero-skew intrinsics")
+    return native_calibration, native_calibration.resized(width, height), distortion
 
 
 def _output_dimension(value: int, name: str, maximum: int) -> int:

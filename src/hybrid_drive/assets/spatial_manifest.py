@@ -24,7 +24,8 @@ SOURCE_SCHEMA = "hybrid-drive-spatial-loc-sources-v1"
 EVALUATION_SOURCE_SCHEMA = "hybrid-drive-spatial-loc-evaluation-sources-v1"
 POLICY_EVALUATION_SOURCE_SCHEMA = "hybrid-drive-spatial-policy-evaluation-sources-v1"
 TEMPORAL_SOURCE_SCHEMA = "hybrid-drive-spatial-temporal-sources-v1"
-TEMPORAL_ROLES = ("development", "holdout", "stress")
+TRACKING_HOLDOUT_ROLE = "tracking_holdout"
+TEMPORAL_ROLES = ("development", "holdout", "stress", TRACKING_HOLDOUT_ROLE)
 TEMPORAL_CLIPS_PER_RECORDING = 3
 TEMPORAL_FRAMES_PER_CLIP = 24
 TEMPORAL_DELTA_US = (250_000, 800_000)
@@ -38,6 +39,7 @@ _TEMPORAL_SOURCE_HASHES = {
     "development": "8123701b1d8e4272c1dd3fd677ca32bc9b6d76d785665006f52b25d3fc44c80e",
     "holdout": "67a84eb97b46566d864ddb23f4cbccef0a16377ceb8e71ffc17d443e6fff45dd",
     "stress": "c1b0e7f4a67ceab9119fb5d8b429ac98b6a48c75a6f7098a0bb72363c7eb56ef",
+    TRACKING_HOLDOUT_ROLE: "a8d0ee46059faaf70fac05f161932f5d8e98fdd4e7ad67c008e9222d7cbaaf41",
 }
 _TEMPORAL_SELECTION = {
     "rule": "uniform-midpoint-contiguous-clips-v1",
