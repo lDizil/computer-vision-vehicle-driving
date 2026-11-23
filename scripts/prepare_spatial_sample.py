@@ -29,6 +29,9 @@ def main():
         archives[shard] = Path(path)
     try:
         sources = load_spatial_sources(args.sources)
+        missing = set(args.report_split or ()) - sources["logs"].keys()
+        if missing:
+            parser.error(f"Spatial pack does not contain requested splits: {', '.join(sorted(missing))}")
         manifest = prepare_spatial_sample(args.root, sources, args.metadata_archive, archives)
         summary = _summary(args.root, manifest, args.report_split or ())
     except (OSError, ValueError, KeyError, pickle.UnpicklingError) as exc:

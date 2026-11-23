@@ -38,14 +38,16 @@ class SpatialAlignmentBatch:
 
 
 class SpatialAlignmentDataset(Dataset[SpatialAlignmentExample]):
-    def __init__(self, root: str | Path, split: str):
+    def __init__(self, root: str | Path, split: str, *, expected_manifest_hash: str | None = None):
         if split not in SPLITS:
             raise ValueError("Spatial split must be train, dev or holdout")
         self._root = Path(os.path.abspath(root))
         manifest = read_spatial_manifest(self._root)
+        if expected_manifest_hash is not None and manifest["manifest_hash"] != expected_manifest_hash:
+            raise ValueError("Spatial pack differs from the frozen manifest")
+        self._targets = read_spatial_targets(self._root, manifest, split)
         recordings = manifest["splits"][split]["recordings"]
         self._samples = tuple(sample for recording in recordings for sample in recording["samples"])
-        self._targets = read_spatial_targets(self._root, manifest, split)
         self.dataset_hash = manifest["manifest_hash"]
         self.sample_ids = tuple(sample["sample_id"] for sample in self._samples)
         self.recording_ids = tuple(

@@ -15,19 +15,19 @@ from .alignment_sample import _prepare_frame, _project_cuboid, _read_metadata_me
 from .cohort import _extract_cameras, _verified_archive
 from .files import PreparationError, check_components, destination, write_manifest
 from .spatial_manifest import (
-    BAND_COUNT, MANIFEST_NAME, MANIFEST_SCHEMA, SPLITS, TARGET_SCHEMA, box_horizontal_band,
+    BAND_COUNT, MANIFEST_NAME, MANIFEST_SCHEMA, TARGET_SCHEMA, box_horizontal_band,
     sample_id, validate_spatial_sources, verify_spatial_sample,
 )
 
 
 def prepare_spatial_sample(root, sources, metadata_archive, camera_archives):
-    validate_spatial_sources(sources)
+    splits = validate_spatial_sources(sources)
     if set(camera_archives) != set(sources["camera_archives"]):
         raise PreparationError("Exactly the pinned spatial camera shard paths must be supplied")
     root = Path(os.path.abspath(root))
     check_components(root)
     if (root / MANIFEST_NAME).exists():
-        return verify_spatial_sample(root)
+        return verify_spatial_sample(root, expected_sources=sources)
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise PreparationError("Spatial preparation requires a new empty root")
     if sys.platform != "linux":
@@ -44,7 +44,7 @@ def prepare_spatial_sample(root, sources, metadata_archive, camera_archives):
             "schema": MANIFEST_SCHEMA,
             "sources": sources,
             "archive_verification": ARCHIVE_VERIFICATION,
-            "splits": {split: _prepare_split(stage, raw_root, sources, selected, originals, split) for split in SPLITS},
+            "splits": {split: _prepare_split(stage, raw_root, sources, selected, originals, split) for split in splits},
         }
         manifest["manifest_hash"] = digest_json(manifest)
         write_manifest(stage / MANIFEST_NAME, manifest)
@@ -55,7 +55,7 @@ def prepare_spatial_sample(root, sources, metadata_archive, camera_archives):
 
 
 def _select_spatial_frames(sources, metadata_archive):
-    specs = {log["recording_id"]: log for split in SPLITS for log in sources["logs"][split]}
+    specs = {log["recording_id"]: log for logs in sources["logs"].values() for log in logs}
     with _verified_archive(metadata_archive, sources["metadata_archive"]) as archive:
         metadata = _read_metadata_members(archive, specs)
     return {
@@ -69,8 +69,8 @@ def _select_spatial_frames(sources, metadata_archive):
 
 def _extract_spatial_cameras(raw_root, archives, sources, selected):
     by_shard = {shard: [] for shard in archives}
-    for split in SPLITS:
-        for log in sources["logs"][split]:
+    for split, logs in sources["logs"].items():
+        for log in logs:
             identity = log["recording_id"]
             for index, _, member in selected[identity]:
                 frame_id = sample_id(split, identity, index)
