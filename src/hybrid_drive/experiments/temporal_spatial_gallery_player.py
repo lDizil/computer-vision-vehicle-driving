@@ -51,8 +51,8 @@ border-radius:9px;overflow:hidden}.stage canvas,.stage svg{position:absolute;ins
 <main>
 <header class="hero">
 <p class="eyebrow">MV / OPENSCENE / CAM_F0</p>
-<h1>Как меняются решения между кадрами</h1>
-<p>Слева — покадровое решение, справа — другой режим на том же кадре. Рамки и «не уверен» можно сравнивать в движении или покадрово.</p>
+<h1 id="hero-title">Как меняются решения между кадрами</h1>
+<p id="hero-description">Слева — покадровое решение, справа — другой режим на том же кадре. Рамки и «не уверен» можно сравнивать в движении или покадрово.</p>
 <div class="chips"><span id="totals">Подготовленные клипы</span><span>Один и тот же снимок слева и справа</span>
 <span>Без сети · офлайн-анализ</span></div>
 </header>
@@ -89,7 +89,7 @@ border-radius:9px;overflow:hidden}.stage canvas,.stage svg{position:absolute;ins
 <p><i class="mint"></i>Рамка, если модель ответила «есть»</p><p><i class="gray"></i>«Не уверен»</p></section>
 <div class="caveats"><p><kbd>←</kbd> <kbd>→</kbd> — смена кадра, <kbd>пробел</kbd> — пуск и пауза.
 Пауза между кадрами следует времени исходной записи, а не времени вычисления модели.</p>
-<p>Эталон — проекция исходной 3D-разметки. Здесь проверяются визуальные решения по зонам,
+<p id="measure-note">Эталон — проекция исходной 3D-разметки. Здесь проверяются визуальные решения по зонам,
 не идентичность машин, частота инференса или управление автомобилем.</p></div>
 <noscript><p class="error">Для просмотра нужен JavaScript; файлы и сеть дополнительно не используются.</p></noscript>
 </main>
@@ -122,7 +122,15 @@ DOCUMENT_END = """</script>
     confirmed: "подтверждено",
     held_uncertain: "краткое удержание",
     score_ema: "сглажена оценка",
-    box_ema: "сглажена рамка"
+    box_ema: "сглажена рамка",
+    new_track: "новый трек",
+    ambiguous_new_track: "связь неоднозначна, новый трек",
+    linked: "ID сохранён",
+    cross_zone: "ID сохранён в соседней зоне",
+    uncertainty_bridge: "ID восстановлен после неизвестного ответа",
+    uncertainty_bridge_cross_zone: "ID после неизвестного ответа в соседней зоне",
+    absent: "рамка не показана",
+    uncertain: "рамка не показана"
   };
   const resetLabels = {
     initial: "Начало клипа: история пуста.",
@@ -148,7 +156,14 @@ DOCUMENT_END = """</script>
   });
   data.modes.forEach(mode => modeSelect.append(option(mode.id, mode.label)));
   modeSelect.value = data.selected;
-  byId("dev").textContent = "Режим по умолчанию выбран только на dev: " + labelById.get(data.selected) + ".";
+  byId("left-title").textContent = labelById.get(data.baseline);
+  if (data.tracking) {
+    byId("hero-title").textContent = "Та же машина или новый трек?";
+    byId("hero-description").textContent = "Слева ID по зоне, справа другой способ связать те же рамки. Положение и число рамок не меняются.";
+    byId("measure-note").textContent = "Проверяем связность видимых рамок по проекциям исходных объектов. Это не скорость машины и не решение о вождении.";
+  }
+  byId("dev").textContent = "Режим по умолчанию выбран только на dev: " + labelById.get(data.selected) + "." +
+    (data.tracking ? " G — эталонный трек, P — прогнозный. Номера действуют только внутри клипа." : "");
   byId("totals").textContent = data.clips.length + " клипов · " +
     data.clips.reduce((count, clip) => count + clip.frames.length, 0) + " кадров · " +
     data.modes.length + " режимов";
@@ -192,6 +207,16 @@ DOCUMENT_END = """</script>
     }, cssClass);
   }
 
+  function trackMark(label, box, isTruth) {
+    const item = svgShape("text", {
+      x: box[0] * width + 3, y: Math.max(12, box[1] * width + (isTruth ? -3 : 14)),
+      "font-size": 12, "font-weight": 750, fill: isTruth ? "#ffd375" : "#86ffe5",
+      stroke: "#142a3b", "stroke-width": 2, "paint-order": "stroke", "stroke-linejoin": "round"
+    }, "track-id");
+    item.textContent = label;
+    return item;
+  }
+
   function reasonLabel(value) {
     return value.split("+").map(part => reasonLabels[part] || part).join(" · ");
   }
@@ -220,8 +245,16 @@ DOCUMENT_END = """</script>
       const x = zone * width / bands;
       overlay.push(svgShape("line", { x1: x, y1: 0, x2: x, y2: width }, "guide"));
     }
-    for (const box of frame.truth) if (box !== null) overlay.push(rect(box, "truth-box"));
-    for (const box of result.boxes) if (box !== null) overlay.push(rect(box, "pred-box"));
+    frame.truth.forEach((box, i) => {
+      if (box === null) return;
+      overlay.push(rect(box, "truth-box"));
+      if (frame.track_truth) overlay.push(trackMark(frame.track_truth[i], box, true));
+    });
+    result.boxes.forEach((box, i) => {
+      if (box === null) return;
+      overlay.push(rect(box, "pred-box"));
+      if (result.track_labels) overlay.push(trackMark(result.track_labels[i], box, false));
+    });
     byId(side + "-overlay").replaceChildren(...overlay);
     byId(side + "-zones").replaceChildren(
       ...result.states.map((state, zone) => zoneCard(state, result.reasons[zone], zone))
