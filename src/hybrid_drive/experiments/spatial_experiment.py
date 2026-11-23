@@ -1,9 +1,7 @@
 """Train a spatial probe and a matched zero-feature control before opening final labels."""
 
-from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-import hashlib
 import math
 import os
 from pathlib import Path
@@ -15,11 +13,15 @@ from torch.utils.data import DataLoader
 
 from hybrid_drive.assets.files import check_components
 from hybrid_drive.neural.pretrained_alignment import load_alignment_vision
-from hybrid_drive.neural.spatial_data import SpatialAlignmentDataset, collate_spatial_alignment
+from hybrid_drive.neural.spatial_data import (
+    SpatialAlignmentDataset,
+    collate_spatial_alignment,
+    verify_spatial_splits,
+)
 from hybrid_drive.neural.spatial_loc import SpatialLocLoss, SpatialLocProbe
 from .bounded_io import require_hex
 from .io import write_json
-from .neural_checkpoint import load_neural_weights, save_neural_weights
+from .neural_checkpoint import load_neural_weights, module_state_hash, save_neural_weights
 from .protocol import content_hash
 from .spatial_metrics import (
     SpatialPredictions,
@@ -131,12 +133,12 @@ def run_spatial_experiment(data_root, model_root, results_root, *, revision, rec
 
 def _run(root, data_root, model_root, recipe, manifest, result, trace):
     datasets = {role: SpatialAlignmentDataset(data_root, role) for role in ("train", "dev")}
-    _check_split_contracts(datasets)
+    verify_spatial_splits(datasets, SPLIT_FRAMES)
     manifest["dataset_hash"] = datasets["train"].dataset_hash
     vision, provenance = load_alignment_vision(model_root)
     if vision.training or any(p.requires_grad or p.grad is not None for p in vision.parameters()):
         raise ValueError("Vision must be frozen before spatial training")
-    frozen = _state_hash(vision)
+    frozen = module_state_hash(vision)
     manifest["vision"] = provenance
     encoded = {role: _encode(dataset, vision, recipe.batch_size) for role, dataset in datasets.items()}
 
@@ -159,13 +161,13 @@ def _run(root, data_root, model_root, recipe, manifest, result, trace):
         for condition in CONDITIONS:
             torch.manual_seed(seed)
             probe = SpatialLocProbe(vision.visual_dim)
-            initial = _state_hash(probe)
+            initial = module_state_hash(probe)
             if initial_hash is not None and initial != initial_hash:
                 raise ValueError("Matched arms must initialize identically")
             initial_hash = initial
             print(f"Seed {seed}, {condition}: {recipe.epochs} epochs", flush=True)
             _train(probe, criterion, training, condition, orders, seed, recipe.batch_size, trace, root)
-            final_hash = _state_hash(probe)
+            final_hash = module_state_hash(probe)
             if final_hash == initial:
                 raise ValueError("Spatial model weights did not update")
             dev_predictions = _predict(probe, encoded["dev"], condition, recipe.batch_size)
@@ -219,7 +221,7 @@ def _run(root, data_root, model_root, recipe, manifest, result, trace):
     write_json(root / "result.json", result)
 
     datasets["holdout"] = SpatialAlignmentDataset(data_root, "holdout")
-    _check_split_contracts(datasets)
+    verify_spatial_splits(datasets, SPLIT_FRAMES)
     held = _encode(datasets["holdout"], vision, recipe.batch_size)
     encoded["holdout"] = held
     manifest["split_recordings"] = {role: sorted(set(ds.recording_ids)) for role, ds in datasets.items()}
@@ -233,7 +235,7 @@ def _run(root, data_root, model_root, recipe, manifest, result, trace):
             expected_sha256=artifact["sha256"],
             expected_metadata=run["checkpoint_metadata"],
         )
-        if _state_hash(restored) != run["final_weights_hash"]:
+        if module_state_hash(restored) != run["final_weights_hash"]:
             raise ValueError("Loaded spatial checkpoint differs from the frozen trained state")
         run["checkpoint_state_bitwise_equal"] = True
         condition, threshold = run["condition"], run["dev_threshold"]["threshold"]
@@ -245,7 +247,7 @@ def _run(root, data_root, model_root, recipe, manifest, result, trace):
         write_json(root / "result.json", result)
 
     result["paired_holdout_deltas"] = _paired_deltas(prepared, recipe.seeds)
-    result["frozen_vision_unchanged"] = _state_hash(vision) == frozen
+    result["frozen_vision_unchanged"] = module_state_hash(vision) == frozen
     if not result["frozen_vision_unchanged"] or any(p.grad is not None for p in vision.parameters()):
         raise ValueError("Frozen vision state or gradients changed")
     result["feature_encode_wall_s"] = {role: value.feature_wall_s for role, value in encoded.items()}
@@ -274,28 +276,6 @@ def _paired_deltas(runs, seeds):
             }
         )
     return output
-
-
-def _check_split_contracts(datasets):
-    seen_recordings, seen_samples = set(), set()
-    manifest_hashes = set()
-    for role, dataset in datasets.items():
-        samples = set(dataset.sample_ids)
-        recordings = Counter(dataset.recording_ids)
-        if (
-            len(samples) != SPLIT_FRAMES[role]
-            or len(dataset) != len(samples)
-            or len(recordings) != 2
-            or any(n != len(samples) // 2 for n in recordings.values())
-        ):
-            raise ValueError(f"{role} must preserve its full two-recording selection")
-        if seen_recordings.intersection(recordings) or seen_samples.intersection(samples):
-            raise ValueError("Train, dev and holdout must use distinct recording and sample IDs")
-        seen_recordings.update(recordings)
-        seen_samples.update(samples)
-        manifest_hashes.add(dataset.dataset_hash)
-    if len(manifest_hashes) != 1:
-        raise ValueError("Splits must share one frozen data manifest")
 
 
 @torch.no_grad()
@@ -379,11 +359,3 @@ def _predict(probe, encoded, condition, batch_size, feature_order=None):
         encoded.target_boxes.numpy(),
         encoded.recording_ids,
     )
-
-
-def _state_hash(module):
-    digest = hashlib.sha256()
-    for name, tensor in sorted(module.state_dict().items()):
-        digest.update(repr((name, tuple(tensor.shape), str(tensor.dtype))).encode())
-        digest.update(memoryview(tensor.detach().cpu().contiguous().numpy()).cast("B"))
-    return digest.hexdigest()

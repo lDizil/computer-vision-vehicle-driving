@@ -134,3 +134,12 @@ def _header(data):
     if not isinstance(header, dict):
         raise ValueError("Safetensors header must be an object")
     return header
+
+
+def module_state_hash(module):
+    """Bitwise CPU tensor fingerprint; keep the spatial receipt format stable."""
+    digest = hashlib.sha256()
+    for name, tensor in sorted(module.state_dict().items()):
+        digest.update(repr((name, tuple(tensor.shape), str(tensor.dtype))).encode())
+        digest.update(memoryview(tensor.detach().cpu().contiguous().numpy()).cast("B"))
+    return digest.hexdigest()
