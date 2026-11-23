@@ -163,3 +163,21 @@ def test_rejects_target_order_before_creating_output(tmp_path):
     with pytest.raises(PreparationError, match="target identity"):
         _render(tmp_path, manifest, {"baseline": GalleryPredictions(scores, boxes, 0.0)})
     assert not (tmp_path / "report").exists()
+
+
+def test_uncertain_zone_is_shaded_without_drawing_a_positive_box(tmp_path):
+    manifest, scores, boxes = _pack(tmp_path / "assets")
+    uncertain = np.zeros(scores.shape, dtype=np.bool_)
+    uncertain[:, 1] = True
+    page = _render(tmp_path, manifest, {"policy": GalleryPredictions(scores, boxes, 0.5, uncertain=uncertain)})
+    assert page.count('class="uncertain-zone" x="56.0000"') == 4
+    assert page.count('class="prediction-box"') == 4
+    assert page.count("Не уверен: 1 / 4") == 4
+
+
+def test_gallery_rejects_showing_and_abstaining_on_the_same_query(tmp_path):
+    manifest, scores, boxes = _pack(tmp_path / "assets")
+    uncertain = np.zeros(scores.shape, dtype=np.bool_)
+    uncertain[:, 0] = True
+    with pytest.raises(ValueError, match="disjoint from shown"):
+        _render(tmp_path, manifest, {"bad": GalleryPredictions(scores, boxes, 0.5, uncertain=uncertain)})
