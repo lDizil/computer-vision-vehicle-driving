@@ -15,8 +15,8 @@ from .alignment_sample import _prepare_frame, _project_cuboid, _read_metadata_me
 from .cohort import _extract_cameras, _verified_archive
 from .files import PreparationError, check_components, destination, write_manifest
 from .spatial_manifest import (
-    BAND_COUNT, MANIFEST_NAME, MANIFEST_SCHEMA, TARGET_SCHEMA, box_horizontal_band,
-    sample_id, validate_spatial_sources, verify_spatial_sample,
+    BAND_COUNT, MANIFEST_NAME, MANIFEST_SCHEMA, TARGET_SCHEMA, TEMPORAL_SOURCE_SCHEMA, box_horizontal_band,
+    sample_id, spatial_frame_indices, validate_spatial_sources, validate_temporal_cadence, verify_spatial_sample,
 )
 
 
@@ -58,13 +58,16 @@ def _select_spatial_frames(sources, metadata_archive):
     specs = {log["recording_id"]: log for logs in sources["logs"].values() for log in logs}
     with _verified_archive(metadata_archive, sources["metadata_archive"]) as archive:
         metadata = _read_metadata_members(archive, specs)
-    return {
-        identity: _select_recording_frames(
-            metadata.pop(identity), log,
-            sources["camera_archives"][str(log["camera_shard"])]["archive_prefix"], identity,
+    selected = {}
+    for identity, log in specs.items():
+        prefix = sources["camera_archives"][str(log["camera_shard"])]["archive_prefix"]
+        frames = _select_recording_frames(
+            metadata.pop(identity), log, prefix, identity, source_indices=spatial_frame_indices(sources, log),
         )
-        for identity, log in specs.items()
-    }
+        if sources["schema"] == TEMPORAL_SOURCE_SCHEMA:
+            validate_temporal_cadence([frame["timestamp"] for _, frame, _ in frames])
+        selected[identity] = frames
+    return selected
 
 
 def _extract_spatial_cameras(raw_root, archives, sources, selected):
