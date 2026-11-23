@@ -221,8 +221,15 @@ def _read_compact(path, boxes, active, dim, binding, expected_sha256):
 
 
 def _verify_dense(data, boxes, active, dim):
-    if not torch.equal(data.windows, make_zoom_windows(boxes, active)):
-        raise ValueError("Saved crop windows do not match the original visible boxes")
+    if (
+        data.windows.device.type != "cpu" or data.windows.dtype != torch.float32 or data.windows.requires_grad
+        or data.windows.shape != boxes.shape or len(boxes) == 0
+    ):
+        raise ValueError("Expected one frozen crop window per original visible box slot")
+    for start in range(0, len(boxes), 16):
+        indices = slice(start, start + 16)
+        if not torch.equal(data.windows[indices], make_zoom_windows(boxes[indices], active[indices])):
+            raise ValueError("Saved crop windows do not match the original visible boxes")
     for values in (data.global_features, data.zoom_features):
         if (
             values.dtype != torch.float32 or values.device.type != "cpu"

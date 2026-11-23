@@ -81,3 +81,18 @@ def test_wrong_previous_decision_hash_rejected_before_reopening_tensor(tmp_path,
     monkeypatch.setattr(capture,"_read_compact",lambda *a,**k:pytest.fail("Tensor accessed without provenance"))
     with pytest.raises(ValueError,match="original frozen decisions"):
         capture.reopen_zoom_capture(tmp_path,scope,expected_sha256=hashlib.sha256(f.read_bytes()).hexdigest())
+
+
+
+def test_role_larger_than_one_encoder_batch_is_verified_in_chunks(tmp_path):
+    boxes, active, row = _grids()
+    n = 17
+    boxes = boxes[:1].expand(n, -1, -1).clone()
+    active = active[:1].expand(n, -1).clone()
+    g = capture.ZoomGrids(*(x[:1].expand(n, *x.shape[1:]).clone()
+                            for x in (row.windows, row.global_features, row.zoom_features)))
+    p = tmp_path / "whole-role.safetensors"
+    digest = capture._write_compact(p, g, boxes, active, 3, "whole-role")
+    restored = capture._read_compact(p, boxes, active, 3, "whole-role", digest)
+    assert torch.equal(restored.windows, g.windows)
+    assert torch.equal(restored.zoom_features, g.zoom_features)
