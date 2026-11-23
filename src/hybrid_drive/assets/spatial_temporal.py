@@ -10,6 +10,7 @@ from .spatial_manifest import (
     TEMPORAL_FRAMES_PER_CLIP,
     TEMPORAL_ROLES,
     TEMPORAL_SOURCE_SCHEMA,
+    TRACKING_HOLDOUT_ROLE,
     read_spatial_manifest,
     verify_disjoint_spatial_manifests,
 )
@@ -60,10 +61,12 @@ def read_temporal_spatial_pack(root, *, role):
     return TemporalSpatialPack(root, manifest, tuple(frames))
 
 
-def verify_independent_temporal_final(final_pack, previous_roots):
+def verify_independent_temporal_final(final_pack, previous_roots, *, expected_role="holdout"):
     """Fail closed if an earlier spatial pack shares the final observation or its group."""
+    if expected_role not in ("holdout", TRACKING_HOLDOUT_ROLE):
+        raise ValueError("Expected a pinned temporal holdout role")
     sources = final_pack.manifest["sources"]
-    if sources["schema"] != TEMPORAL_SOURCE_SCHEMA or sources["temporal_role"] != "holdout":
+    if sources["schema"] != TEMPORAL_SOURCE_SCHEMA or sources["temporal_role"] != expected_role:
         raise PreparationError("Independence requires the pinned temporal holdout")
     roots = tuple(previous_roots)
     if not roots:

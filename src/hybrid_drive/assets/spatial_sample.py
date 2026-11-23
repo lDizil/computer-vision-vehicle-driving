@@ -112,6 +112,11 @@ def _prepare_split(stage, raw_root, sources, selected, originals, split):
 
 
 def _spatial_target(annotations, calibration, identity):
+    aabbs, _ = _select_spatial_targets(annotations, calibration)
+    return {"sample_id": identity, "presence": [aabb is not None for aabb in aabbs], "boxes_2d": aabbs}
+
+
+def _select_spatial_targets(annotations, calibration):
     names = np.asarray(annotations["gt_names"])
     boxes = np.asarray(annotations["gt_boxes"])
     if (names.ndim != 1 or any(not isinstance(name, str) for name in names) or boxes.shape != (len(names), 7)
@@ -120,7 +125,8 @@ def _spatial_target(annotations, calibration, identity):
 
     nearest = [math.inf] * BAND_COUNT
     aabbs = [None] * BAND_COUNT
-    for name, cuboid in zip(names, boxes):
+    indices = [None] * BAND_COUNT
+    for index, (name, cuboid) in enumerate(zip(names, boxes)):
         if name != "vehicle":
             continue
         box = cuboid.astype(np.float64)
@@ -136,5 +142,5 @@ def _spatial_target(annotations, calibration, identity):
         band = box_horizontal_band(aabb)
         # The first annotation wins an equal ground-distance tie.
         if distance < nearest[band]:
-            nearest[band], aabbs[band] = distance, aabb.tolist()
-    return {"sample_id": identity, "presence": [aabb is not None for aabb in aabbs], "boxes_2d": aabbs}
+            nearest[band], aabbs[band], indices[band] = distance, aabb.tolist(), index
+    return aabbs, indices

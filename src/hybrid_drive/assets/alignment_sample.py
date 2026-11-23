@@ -209,15 +209,7 @@ def _prepare_frame(stage, raw_root, index, frame, original, identity):
     path.parent.mkdir(parents=True, exist_ok=True)
     data = encoded.getvalue()
     path.write_bytes(data)
-    calibration = {
-        "camera_to_ego_rotation": np.asarray(camera["sensor2lidar_rotation"]).tolist(),
-        "camera_to_ego_translation": np.asarray(camera["sensor2lidar_translation"]).tolist(),
-        "native_intrinsic": np.asarray(camera["cam_intrinsic"]).tolist(),
-        "distortion": np.asarray(camera["distortion"]).tolist(),
-        "native_size": [original["width"], original["height"]],
-        "rectified_intrinsic": view.calibration.intrinsic.tolist(),
-        "ego_to_camera": view.calibration.ego_to_camera.tolist(),
-    }
+    calibration = _frame_calibration_receipt(camera, original["width"], original["height"], view.calibration)
     sample = {
         "sample_id": identity, "source_list_index": index, "frame_token": frame["token"],
         "scene_token": frame["scene_token"], "frame_idx": frame["frame_idx"], "timestamp_us": frame["timestamp"],
@@ -227,6 +219,18 @@ def _prepare_frame(stage, raw_root, index, frame, original, identity):
         "calibration_sha256": digest_json(calibration),
     }
     return sample, view.calibration
+
+
+def _frame_calibration_receipt(camera, native_width, native_height, calibration):
+    return {
+        "camera_to_ego_rotation": np.asarray(camera["sensor2lidar_rotation"]).tolist(),
+        "camera_to_ego_translation": np.asarray(camera["sensor2lidar_translation"]).tolist(),
+        "native_intrinsic": np.asarray(camera["cam_intrinsic"]).tolist(),
+        "distortion": np.asarray(camera["distortion"]).tolist(),
+        "native_size": [native_width, native_height],
+        "rectified_intrinsic": calibration.intrinsic.tolist(),
+        "ego_to_camera": calibration.ego_to_camera.tolist(),
+    }
 
 
 def _loc_target(annotations, calibration, identity):
