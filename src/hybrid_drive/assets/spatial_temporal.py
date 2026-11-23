@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .files import PreparationError
 from .spatial_manifest import (
+    APPEARANCE_HOLDOUT_ROLE,
     TEMPORAL_FRAMES_PER_CLIP,
     TEMPORAL_ROLES,
     TEMPORAL_SOURCE_SCHEMA,
@@ -63,7 +64,7 @@ def read_temporal_spatial_pack(root, *, role):
 
 def verify_independent_temporal_final(final_pack, previous_roots, *, expected_role="holdout"):
     """Fail closed if an earlier spatial pack shares the final observation or its group."""
-    if expected_role not in ("holdout", TRACKING_HOLDOUT_ROLE):
+    if expected_role not in ("holdout", TRACKING_HOLDOUT_ROLE, APPEARANCE_HOLDOUT_ROLE):
         raise ValueError("Expected a pinned temporal holdout role")
     sources = final_pack.manifest["sources"]
     if sources["schema"] != TEMPORAL_SOURCE_SCHEMA or sources["temporal_role"] != expected_role:

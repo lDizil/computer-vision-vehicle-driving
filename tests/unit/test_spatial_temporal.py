@@ -27,7 +27,8 @@ def _sha(data):
 
 
 def _spec(role):
-    return json.loads((SCRIPTS / f"spatial-temporal-{role}-sources.json").read_text())
+    profile = role.replace("_", "-")
+    return json.loads((SCRIPTS / f"spatial-temporal-{profile}-sources.json").read_text())
 
 
 def _archive(path, declaration, entries):
@@ -47,7 +48,9 @@ def _persist_manifest(root, manifest):
 
 
 @pytest.fixture()
-def archives(tmp_path, monkeypatch):
+def archives(tmp_path, monkeypatch, request):
+    role = getattr(request, "param", "holdout")
+
     def camera(_, native, *args, width, height, **kwargs):
         # Rectification is previously covered; preserve the fixture pixels so
         # this test exercises the actual image export and archive admission.
@@ -60,7 +63,7 @@ def archives(tmp_path, monkeypatch):
     monkeypatch.setattr(alignment_sample, "prepare_openscene_camera", camera)
     monkeypatch.setattr(spatial_sample, "sys", SimpleNamespace(platform="linux"))
     sources = _spec("development")
-    sources["temporal_role"] = "holdout"
+    sources["temporal_role"] = role
     shard = "4"
     prefix = sources["camera_archives"][shard]["archive_prefix"]
     entries, frames_by_recording = [], {}
@@ -99,19 +102,22 @@ def archives(tmp_path, monkeypatch):
             logs.append((log["member"], data))
         _archive(raw_metadata, sources["metadata_archive"], logs)
         _archive(raw_cameras, sources["camera_archives"][shard], entries)
-        monkeypatch.setitem(spatial_manifest._TEMPORAL_SOURCE_HASHES, "holdout", digest_json(sources))
+        monkeypatch.setitem(spatial_manifest._TEMPORAL_SOURCE_HASHES, role, digest_json(sources))
         return spatial_sample.prepare_spatial_sample(root, sources, raw_metadata, {shard: raw_cameras})
 
     return root, sources, frames_by_recording, entries, prepare
 
 
 def test_temporal_source_profiles_pin_distinct_roles_but_reuse_spatial_ground_truth():
-    names = ("development", "holdout", "stress")
+    expected = {"development": "4", "holdout": "22", "stress": "19", "tracking_holdout": "23",
+                "appearance_holdout": "3"}
     profiles = [
-        spatial_manifest.load_spatial_sources(SCRIPTS / f"spatial-temporal-{role}-sources.json") for role in names
+        spatial_manifest.load_spatial_sources(SCRIPTS / f"spatial-temporal-{role.replace('_', '-')}-sources.json")
+        for role in expected
     ]
-    assert [profile["temporal_role"] for profile in profiles] == list(names)
-    assert [list(profile["camera_archives"]) for profile in profiles] == [["4"], ["22"], ["19"]]
+    assert tuple(expected) == spatial_manifest.TEMPORAL_ROLES
+    assert [profile["temporal_role"] for profile in profiles] == list(expected)
+    assert [list(profile["camera_archives"]) for profile in profiles] == [[shard] for shard in expected.values()]
     assert all(profile["rgb"] == profiles[0]["rgb"] and profile["loc"] == profiles[0]["loc"] for profile in profiles)
     assert all(len(profile["logs"]["holdout"]) == 2 for profile in profiles)
     assert all(log["sample_count"] == 72 for profile in profiles for log in profile["logs"]["holdout"])
@@ -282,3 +288,53 @@ def test_independence_rejects_overlap_with_any_earlier_pack(archives, monkeypatc
     monkeypatch.setattr(spatial_temporal, "read_spatial_manifest", {"distinct": first, "other": another}.__getitem__)
     with pytest.raises(ValueError, match="overlaps the previously seen pack|target protocol"):
         verify_independent_temporal_final(final, ("distinct", "other"))
+
+
+
+@pytest.mark.parametrize("change", ["substitute_role", "replace_recording", "archive_digest", "sampling"])
+def test_appearance_pin_rejects_role_substitution_and_edited_source_facts(change):
+    source = _spec("appearance_holdout")
+    if change == "substitute_role":
+        source["temporal_role"] = "tracking_holdout"
+    elif change == "replace_recording":
+        source["logs"]["holdout"][0] = _spec("tracking_holdout")["logs"]["holdout"][0]
+    elif change == "archive_digest":
+        source["camera_archives"]["3"]["sha256"] = "0" * 64
+    else:
+        source["selection"]["frames_per_clip"] = 23
+    with pytest.raises(PreparationError, match="pinned recordings"):
+        spatial_manifest.validate_spatial_sources(source)
+
+
+@pytest.mark.parametrize("archives", ["appearance_holdout"], indirect=True)
+def test_appearance_holdout_admission_checks_all_previous_packs_including_the_seventh(archives, monkeypatch):
+    root, _, _, _, prepare = archives
+    prepare()
+    role = spatial_manifest.APPEARANCE_HOLDOUT_ROLE
+    final = read_temporal_spatial_pack(root, role=role)
+    assert len(final.frames) == 144 and len({frame.clip_id for frame in final.frames}) == 6
+    with pytest.raises(PreparationError, match="pinned temporal spatial role"):
+        read_temporal_spatial_pack(root, role="tracking_holdout")
+
+    previous_roots = tuple(f"previous-{index}" for index in range(7))
+    manifests = {previous: _earlier(final.manifest) for previous in previous_roots}
+    observed = []
+
+    def read_previous(path):
+        observed.append(path)
+        return manifests[path]
+
+    monkeypatch.setattr(spatial_temporal, "read_spatial_manifest", read_previous)
+    with pytest.raises(PreparationError, match="pinned temporal holdout"):
+        verify_independent_temporal_final(final, previous_roots)
+    assert observed == []
+
+    verify_independent_temporal_final(final, previous_roots, expected_role=role)
+    assert observed == list(previous_roots)
+
+    extra = manifests[previous_roots[-1]]["splits"]["holdout"]["recordings"][0]["samples"][0]
+    extra["rgb"]["pixels_sha256"] = final.frames[0].rgb["pixels_sha256"]
+    observed.clear()
+    with pytest.raises(ValueError, match="overlaps the previously seen pack by RGB digest"):
+        verify_independent_temporal_final(final, previous_roots, expected_role=role)
+    assert observed == list(previous_roots)
