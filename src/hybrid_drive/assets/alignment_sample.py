@@ -119,7 +119,13 @@ def _select_frames(verified_log, sources, split):
     )
 
 
-def _select_recording_frames(verified_log, spec, archive_prefix, label):
+def _select_recording_frames(verified_log, spec, archive_prefix, label, *, source_indices=None):
+    if source_indices is None:
+        source_indices = midpoint_indices(spec["frame_count"], spec["sample_count"])
+    elif (len(source_indices) != spec["sample_count"]
+            or any(type(i) is not int or not 0 <= i < spec["frame_count"] for i in source_indices)
+            or any(left >= right for left, right in zip(source_indices, source_indices[1:]))):
+        raise PreparationError("Requested source indices must match the exact count and be strictly ordered")
     frames = pickle.loads(verified_log)
     if not isinstance(frames, list):
         raise PreparationError(f"{label} source metadata is not a list of frames")
@@ -127,7 +133,7 @@ def _select_recording_frames(verified_log, spec, archive_prefix, label):
         raise PreparationError(
             f"{label} source metadata has {len(frames)} frames, expected {spec['frame_count']}"
         )
-    indices = set(midpoint_indices(spec["frame_count"], spec["sample_count"]))
+    indices = set(source_indices)
     selected, tokens, image_members = [], set(), set()
     previous_timestamp = 0
     for index, frame in enumerate(frames):
