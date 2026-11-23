@@ -106,3 +106,17 @@ def test_rehashed_gate_mismatch_prevents_opening_reference_labels(tmp_path, monk
     assert r["status"]=="failed" and "differs from the frozen gate" in r["error"]
     assert opened==list((*bench.TRAIN_ROLES,*bench.DEV_ROLES))
     assert not reloaded
+
+
+
+def test_gallery_failure_retains_trained_checkpoints_and_completed_scores(tmp_path, monkeypatch):
+    capture, refs, output, opened, reloaded = _arrange(tmp_path, monkeypatch)
+    def fail(*args, **kwargs):
+        raise OSError("injected gallery failure")
+    monkeypatch.setattr(bench, "write_zoom_gallery", fail)
+    path, result, _ = bench.run_zoom_benchmark(capture, refs, output, revision="d"*40)
+    assert result["status"] == "failed" and "injected gallery failure" in result["error"]
+    assert len(result["trained"]) == len(reloaded) == 6 and opened == list(bench.ZOOM_ROLES)
+    assert set(result["matrix"]["references"]) == set(bench.REFERENCE_ROLES)
+    assert content_hash(result["matrix"]) == result["matrix_hash"]
+    assert "gallery" not in result and (path/"result.json").exists()

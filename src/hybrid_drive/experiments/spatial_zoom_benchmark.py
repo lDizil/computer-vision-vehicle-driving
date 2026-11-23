@@ -147,7 +147,7 @@ def _compare(root, capture, truth, result):
 
     # Reference targets are opened for the first time below. Their recordings
     # were seen in older experiments, but not in this refiner fit or gate.
-    references = {}
+    references, primary = {}, None
     approved_ids = set(training.targets) | set(dev.targets)
     for role in REFERENCE_ROLES:
         data = _load_data(capture, truth, (role,))
@@ -162,8 +162,7 @@ def _compare(root, capture, truth, result):
             for name, frames in forecasts.items()
         }
         if role == _PRIMARY_REFERENCE:
-            write_zoom_gallery(root / "zoom.html", capture.inputs.packs[role], data.targets, forecasts, selected=chosen)
-    result["gallery"] = "zoom.html"
+            primary = (data.targets, forecasts)
     result["trained"] = fit_results
     matrix = {
         "development": dev_scores, "references": references, "selection": saved["selection"],
@@ -173,6 +172,13 @@ def _compare(root, capture, truth, result):
         "tracking_is_a_secondary_replay": True, "primary_reference": _PRIMARY_REFERENCE,
     }
     result.update(matrix=matrix, matrix_hash=content_hash(matrix))
+    if primary is None:
+        raise ValueError("Primary comparison clip pack is missing")
+    targets, predictions = primary
+    write_zoom_gallery(
+        root / "zoom.html", capture.inputs.packs[_PRIMARY_REFERENCE], targets, predictions, selected=chosen,
+    )
+    result["gallery"] = "zoom.html"
 
 
 def _load_data(capture, truth, roles):
