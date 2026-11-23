@@ -20,6 +20,20 @@ _PROMPT = (
     "Use the front camera image. Select the nearest vehicle whose box center lies in the central "
     "horizontal half. Is there a vehicle that qualifies? LOC"
 )
+_GROUNDED_PROMPT = (
+    "Front camera. For each vertical quarter from left to right, locate the nearest vehicle "
+    "with box center in that quarter, if any.\n"
+    "First quarter: LOC\nSecond quarter: LOC\nThird quarter: LOC\nFourth quarter: LOC"
+)
+# Pin the whole sequence so reordered quarter cues cannot pass by preserving LOC offsets.
+_GROUNDED_PROMPT_IDS = (
+    34552, 6568, 15, 1198, 1016, 9118, 7150, 432, 1669, 281, 987, 13, 19912, 253, 5275, 4958, 342,
+    3817, 4055, 275, 326, 7150, 13, 604, 667, 15, 187,
+    6407, 7150, 27, 35378, 187,
+    10951, 7150, 27, 35378, 187,
+    25110, 7150, 27, 35378, 187,
+    48949, 7150, 27, 35378,
+)
 _TOKEN_ALIASES = {" LOC": 35378, " MOT": 34794, " yes": 4754, " no": 642}
 _RUNTIME = {
     "torch": "2.0.1",
@@ -39,13 +53,34 @@ _PYTHIA_LEGACY_BUFFERS = {
 
 def load_alignment_backbones(asset_root):
     """Load local immutable assets and return (patch encoder, causal adapter, provenance)."""
+    return _load_alignment_backbones(asset_root, _PROMPT, _encode_prompt)
+
+
+def load_grounded_alignment_backbones(asset_root):
+    """Load the same frozen assets with the four-quarter LOC prompt."""
+    vision, language, provenance = _load_alignment_backbones(asset_root, _GROUNDED_PROMPT, _encode_grounded_prompt)
+    provenance["vision"] = _vision_provenance(
+        {
+            "source": provenance["models"]["vision"],
+            "sources_sha256": provenance["sources_sha256"],
+        },
+        provenance["runtime"],
+    )
+    tokenization = provenance["tokenization"]
+    tokenization["loc_positions"] = [
+        index for index, token in enumerate(tokenization["prompt_ids"]) if token == language.loc_token_id
+    ]
+    return vision, language, provenance
+
+
+def _load_alignment_backbones(asset_root, prompt, encode_prompt):
     vision_path, language_path, provenance = verify_alignment_models(asset_root)
-    runtime = _runtime_versions()
+    runtime = _runtime_profile()
 
     from transformers import GPTNeoXConfig, GPTNeoXForCausalLM, GPTNeoXTokenizerFast
 
     tokenizer = GPTNeoXTokenizerFast.from_pretrained(language_path, local_files_only=True)
-    prompt_ids = _encode_prompt(tokenizer)
+    prompt_ids = encode_prompt(tokenizer)
     language_config = _checked_config(
         GPTNeoXConfig, language_path, model_type="gpt_neox", hidden_size=_LLM_DIM, vocab_size=_VOCAB_SIZE,
         max_position_embeddings=_CONTEXT_SIZE, num_hidden_layers=6, num_attention_heads=8,
@@ -56,9 +91,9 @@ def load_alignment_backbones(asset_root):
         prompt_ids,
     )
     provenance.update(
-        runtime={**runtime, "device": "cpu", "dtype": "float32", "attention": "eager"},
+        runtime=runtime,
         preprocessing=_vision_preprocessing(),
-        tokenization={"aliases": dict(_TOKEN_ALIASES), "prompt": _PROMPT, "prompt_ids": prompt_ids},
+        tokenization={"aliases": dict(_TOKEN_ALIASES), "prompt": prompt, "prompt_ids": prompt_ids},
     )
     return vision, language, provenance
 
@@ -66,11 +101,14 @@ def load_alignment_backbones(asset_root):
 def load_alignment_vision(asset_root):
     """Load only the verified visual encoder, without materializing the LLM."""
     vision_path, provenance = verify_alignment_vision(asset_root)
-    runtime = _runtime_versions()
-    vision = _load_vision(vision_path)
-    return vision, {
+    runtime = _runtime_profile()
+    return _load_vision(vision_path), _vision_provenance(provenance, runtime)
+
+
+def _vision_provenance(provenance, runtime):
+    return {
         **provenance,
-        "runtime": {**runtime, "device": "cpu", "dtype": "float32", "attention": "eager"},
+        "runtime": dict(runtime),
         "preprocessing": _vision_preprocessing(),
     }
 
@@ -109,6 +147,10 @@ def _runtime_versions():
     return runtime
 
 
+def _runtime_profile():
+    return {**_runtime_versions(), "device": "cpu", "dtype": "float32", "attention": "eager"}
+
+
 def _checked_config(config_class, path, **expected):
     config = config_class.from_pretrained(path, local_files_only=True)
     if any(getattr(config, field, None) != value for field, value in expected.items()):
@@ -132,17 +174,29 @@ def _load_model(model_class, path, config, *, ignored=()):
 
 
 def _encode_prompt(tokenizer):
-    if not tokenizer.is_fast:
-        raise ValueError("Expected the pinned fast Pythia tokenizer")
-    for text, token_id in _TOKEN_ALIASES.items():
-        if token_id in tokenizer.all_special_ids or tokenizer.encode(text, add_special_tokens=False) != [token_id]:
-            raise ValueError(f"Pinned Pythia token alias differs for {text!r}")
+    _validate_token_aliases(tokenizer)
     prompt_ids = tokenizer.encode(_PROMPT, add_special_tokens=False)
     loc = _TOKEN_ALIASES[" LOC"]
     if (not prompt_ids or prompt_ids[-1] != loc or loc in prompt_ids[:-1]
             or any(not 0 <= token_id < _VOCAB_SIZE for token_id in prompt_ids)):
         raise ValueError("The fixed Pythia prompt must end in a single consumed LOC")
     return prompt_ids
+
+
+def _encode_grounded_prompt(tokenizer):
+    _validate_token_aliases(tokenizer)
+    prompt_ids = tokenizer.encode(_GROUNDED_PROMPT, add_special_tokens=False)
+    if tuple(prompt_ids) != _GROUNDED_PROMPT_IDS:
+        raise ValueError("The fixed Pythia prompt must retain the four consumed LOC markers in quarter order")
+    return prompt_ids
+
+
+def _validate_token_aliases(tokenizer):
+    if not tokenizer.is_fast:
+        raise ValueError("Expected the pinned fast Pythia tokenizer")
+    for text, token_id in _TOKEN_ALIASES.items():
+        if token_id in tokenizer.all_special_ids or tokenizer.encode(text, add_special_tokens=False) != [token_id]:
+            raise ValueError(f"Pinned Pythia token alias differs for {text!r}")
 
 
 class _DinoPatchGrid(nn.Module):
