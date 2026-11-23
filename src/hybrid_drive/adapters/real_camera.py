@@ -48,6 +48,14 @@ def prepare_openscene_camera(
     motion compensation is inferred from these calibration parameters.
     """
     width, height = _rectified_size(name, profile, width, height)
+    pixels, calibration = _rectify_native_openscene_rgb(
+        name, rgb, intrinsic, camera_to_ego_rotation, camera_to_ego_translation, distortion, width, height,
+    )
+    return CalibratedView(CameraFrame(name, pixels), calibration)
+
+
+def _rectify_native_openscene_rgb(name, rgb, intrinsic, camera_to_ego_rotation,
+                                  camera_to_ego_translation, distortion, width, height):
     _validate_rgb(rgb)
     native_height, native_width = rgb.shape[:2]
     native_calibration, calibration, distortion = _openscene_calibrations(
@@ -65,7 +73,7 @@ def prepare_openscene_camera(
     rectified = cv2.remap(rgb, maps[0], maps[1], interpolation=cv2.INTER_LINEAR,
                           borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
     resized = Image.fromarray(rectified).resize((width, height), resample=Image.Resampling.BILINEAR)
-    return CalibratedView(CameraFrame(name, np.asarray(resized)), calibration)
+    return np.asarray(resized), calibration
 
 
 def openscene_camera_calibrations(

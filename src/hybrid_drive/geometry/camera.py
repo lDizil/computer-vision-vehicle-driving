@@ -9,6 +9,8 @@ from numpy.typing import ArrayLike, NDArray
 from hybrid_drive.contracts._validation import finite_real, identifier
 from hybrid_drive.contracts.trajectory import Trajectory
 
+from .rigid import matrix, numeric_array, rigid_transform
+
 
 Pixel = tuple[float, float]
 PixelSegment = tuple[Pixel, Pixel]
@@ -29,13 +31,12 @@ class CameraCalibration:
                  ego_to_camera: ArrayLike, near_m: float = 0.1):
         name = identifier(name, "name")
         width, height = _dimension(width, "width"), _dimension(height, "height")
-        intrinsic = _matrix(intrinsic, (3, 3), "intrinsic")
-        ego_to_camera = _matrix(ego_to_camera, (4, 4), "ego_to_camera")
+        intrinsic = matrix(intrinsic, (3, 3), "intrinsic")
+        ego_to_camera = rigid_transform(ego_to_camera, "ego_to_camera")
         near_m = finite_real(near_m, "near_m")
         if near_m <= 0:
             raise ValueError("near_m must be positive")
         _validate_intrinsic(intrinsic)
-        _validate_rigid_transform(ego_to_camera)
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "width", width)
         object.__setattr__(self, "height", height)
@@ -69,45 +70,11 @@ def _dimension(value: int, name: str) -> int:
     return int(value)
 
 
-def _matrix(value: ArrayLike, shape: tuple[int, int], name: str) -> NDArray[np.float64]:
-    result = _numeric_array(value, name)
-    if result.shape != shape:
-        raise ValueError(f"{name} must have shape {shape}")
-    return result
-
-
-def _numeric_array(value: ArrayLike, name: str) -> NDArray[np.float64]:
-    try:
-        array = np.asarray(value)
-        # NumPy otherwise silently coerces mixed Python booleans to integers.
-        contains_bool = any(isinstance(item, (bool, np.bool_)) for item in np.asarray(value, dtype=object).flat)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must contain finite real numeric values") from exc
-    if array.dtype.kind not in "fiu" or contains_bool:
-        raise ValueError(f"{name} must contain finite real numeric values, not booleans")
-    with np.errstate(over="ignore", invalid="ignore"):
-        result = array.astype(np.float64, copy=True)
-    if not np.isfinite(result).all():
-        raise ValueError(f"{name} must contain finite real numeric values")
-    return result
-
-
 def _validate_intrinsic(intrinsic: NDArray[np.float64]) -> None:
     if not np.array_equal(intrinsic[2], [0, 0, 1]) or intrinsic[1, 0] != 0:
         raise ValueError("intrinsic must be an upper-triangular pinhole matrix with bottom row [0, 0, 1]")
     if intrinsic[0, 0] <= 0 or intrinsic[1, 1] <= 0:
         raise ValueError("intrinsic focal lengths must be positive")
-
-
-def _validate_rigid_transform(transform: NDArray[np.float64]) -> None:
-    if not np.array_equal(transform[3], [0, 0, 0, 1]):
-        raise ValueError("ego_to_camera must have homogeneous bottom row [0, 0, 0, 1]")
-    rotation = transform[:3, :3]
-    with np.errstate(over="ignore", invalid="ignore"):
-        orthonormal = np.allclose(rotation @ rotation.T, np.eye(3), rtol=0, atol=1e-9)
-        determinant = np.linalg.det(rotation)
-    if not orthonormal or not np.isclose(determinant, 1, rtol=0, atol=1e-9):
-        raise ValueError("ego_to_camera rotation must be proper orthonormal (determinant +1)")
 
 
 def project_segments(points_xyz: ArrayLike, calibration: CameraCalibration) -> tuple[PixelSegment, ...]:
@@ -120,7 +87,7 @@ def project_segments(points_xyz: ArrayLike, calibration: CameraCalibration) -> t
     """
     if not isinstance(calibration, CameraCalibration):
         raise ValueError("calibration must be CameraCalibration")
-    points = _numeric_array(points_xyz, "points_xyz")
+    points = numeric_array(points_xyz, "points_xyz")
     if points.ndim != 2 or points.shape[1] != 3:
         raise ValueError("points_xyz must have shape [N, 3]")
     transform = calibration.ego_to_camera
