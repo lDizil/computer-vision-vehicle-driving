@@ -109,8 +109,10 @@ def archives(tmp_path, monkeypatch, request):
 
 
 def test_temporal_source_profiles_pin_distinct_roles_but_reuse_spatial_ground_truth():
-    expected = {"development": "4", "holdout": "22", "stress": "19", "tracking_holdout": "23",
-                "appearance_holdout": "3"}
+    expected = {
+        "development": "4", "holdout": "22", "stress": "19", "tracking_holdout": "23",
+        "appearance_holdout": "3", "zoom_gate_holdout": "1",
+    }
     profiles = [
         spatial_manifest.load_spatial_sources(SCRIPTS / f"spatial-temporal-{role.replace('_', '-')}-sources.json")
         for role in expected
@@ -121,6 +123,56 @@ def test_temporal_source_profiles_pin_distinct_roles_but_reuse_spatial_ground_tr
     assert all(profile["rgb"] == profiles[0]["rgb"] and profile["loc"] == profiles[0]["loc"] for profile in profiles)
     assert all(len(profile["logs"]["holdout"]) == 2 for profile in profiles)
     assert all(log["sample_count"] == 72 for profile in profiles for log in profile["logs"]["holdout"])
+
+
+
+def test_zoom_gate_holdout_sources_do_not_overlap_any_prior_spatial_pack():
+    source = spatial_manifest.load_spatial_sources(SCRIPTS / "spatial-temporal-zoom-gate-holdout-sources.json")
+    recordings = source["logs"]["holdout"]
+    names = [recording["log_name"] for recording in recordings]
+    assert names == ["2021.10.05.07.10.04_veh-52_01442_01802", "2021.10.01.19.16.42_veh-28_02011_02410"]
+    assert source["publisher_mapping"]["selected_entries"] == {"openscene_sensor_mini_1": names}
+    assert [recording["camera_shard"] for recording in recordings] == [1, 1]
+    assert [spatial_manifest.spatial_frame_indices(source, recording) for recording in recordings] == [
+        (*range(108, 132), *range(348, 372), *range(588, 612)),
+        (*range(121, 145), *range(387, 411), *range(653, 677)),
+    ]
+
+    def groups(profile):
+        return {
+            (log["recording_id"][:10], log["recording_id"].rsplit("_", 1)[1])
+            for split in profile["logs"].values() for log in split
+        }
+
+    previous = (
+        "spatial-loc", "spatial-loc-evaluation", "spatial-loc-policy-evaluation",
+        "spatial-temporal-development", "spatial-temporal-holdout", "spatial-temporal-stress",
+        "spatial-temporal-tracking-holdout", "spatial-temporal-appearance-holdout",
+    )
+    scope = ("dataset", "openscene_revision", "navsim_revision", "nuplan_revision", "rgb", "loc")
+    fresh_groups = groups(source)
+    assert len(fresh_groups) == 2
+    for name in previous:
+        earlier = spatial_manifest.load_spatial_sources(SCRIPTS / f"{name}-sources.json")
+        assert fresh_groups.isdisjoint(groups(earlier)), name
+        assert all(source[key] == earlier[key] for key in scope), name
+
+
+@pytest.mark.parametrize("change", ["role", "recording", "member", "archive", "selection"])
+def test_zoom_gate_holdout_rejects_edits_to_the_frozen_source_facts(change):
+    source = _spec("zoom_gate_holdout")
+    if change == "role":
+        source["temporal_role"] = "appearance_holdout"
+    elif change == "recording":
+        source["logs"]["holdout"][0] = _spec("appearance_holdout")["logs"]["holdout"][0]
+    elif change == "member":
+        source["logs"]["holdout"][0]["sha256"] = "0" * 64
+    elif change == "archive":
+        source["camera_archives"]["1"]["size_bytes"] -= 1
+    else:
+        source["selection"]["frames_per_clip"] -= 1
+    with pytest.raises(PreparationError, match="pinned recordings"):
+        spatial_manifest.validate_spatial_sources(source)
 
 
 @pytest.mark.parametrize("change", ["role", "sampling", "archive"])
@@ -306,17 +358,19 @@ def test_appearance_pin_rejects_role_substitution_and_edited_source_facts(change
         spatial_manifest.validate_spatial_sources(source)
 
 
-@pytest.mark.parametrize("archives", ["appearance_holdout"], indirect=True)
-def test_appearance_holdout_admission_checks_all_previous_packs_including_the_seventh(archives, monkeypatch):
-    root, _, _, _, prepare = archives
+@pytest.mark.parametrize(
+    ("archives", "previous_count"), [("appearance_holdout", 7), ("zoom_gate_holdout", 8)], indirect=["archives"],
+)
+def test_additional_holdout_admission_checks_all_previous_packs(archives, previous_count, monkeypatch):
+    root, sources, _, _, prepare = archives
     prepare()
-    role = spatial_manifest.APPEARANCE_HOLDOUT_ROLE
+    role = sources["temporal_role"]
     final = read_temporal_spatial_pack(root, role=role)
     assert len(final.frames) == 144 and len({frame.clip_id for frame in final.frames}) == 6
     with pytest.raises(PreparationError, match="pinned temporal spatial role"):
         read_temporal_spatial_pack(root, role="tracking_holdout")
 
-    previous_roots = tuple(f"previous-{index}" for index in range(7))
+    previous_roots = tuple(f"previous-{index}" for index in range(previous_count))
     manifests = {previous: _earlier(final.manifest) for previous in previous_roots}
     observed = []
 
