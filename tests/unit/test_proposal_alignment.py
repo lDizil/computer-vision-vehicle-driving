@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 from hybrid_drive.experiments import proposal_alignment as trial
+from hybrid_drive.experiments import proposal_evaluation as evaluation
 
 
 class _Vision(nn.Module):
@@ -40,7 +41,12 @@ class _Language(nn.Module):
 
 
 class _Prior:
-    receipt = {"dataset_hash": "d" * 64, "seed": 0, "condition": "image_features"}
+    receipt = {
+        "dataset_hash": "d" * 64,
+        "seed": 0,
+        "condition": "image_features",
+        "calibration": {"threshold": -0.75},
+    }
 
     @staticmethod
     def predict(patches):
@@ -49,12 +55,17 @@ class _Prior:
         x = left[None] + offset + 0.025
         return torch.stack((x, torch.full_like(x, 0.10), x + 0.12, torch.full_like(x, 0.46)), dim=-1)
 
+    @classmethod
+    def predict_spatial(cls, patches):
+        boxes = cls.predict(patches)
+        return SimpleNamespace(boxes_xyxy=boxes, presence_logits=boxes[..., 0] - 0.25)
+
 
 def _fixture(monkeypatch, output, runs=4):
     opened = []
 
     class Dataset:
-        def __init__(self, root, role):
+        def __init__(self, root, role, *, expected_manifest_hash=None):
             opened.append(role)
             self.sample_ids = tuple(f"{role}-{i}" for i in range(4))
             self.recording_ids = (role + "a", role + "a", role + "b", role + "b")
@@ -66,6 +77,12 @@ def _fixture(monkeypatch, output, runs=4):
                 assert all(set(row["dev_thresholds"]) == {"decoder", "text"} for row in frozen["runs"])
                 assert len(list(directory.glob("*.safetensors"))) == runs
                 assert all(role.startswith("dev") for role in frozen["dev_recordings"])
+                if root == "fresh":
+                    assert expected_manifest_hash == frozen["fresh_holdout_manifest_hash"] == "e" * 64
+                    assert frozen["memory_mode"] == "roi_tokens"
+                    self.dataset_hash = expected_manifest_hash
+                else:
+                    assert expected_manifest_hash is None
 
         def __len__(self):
             return len(self.sample_ids)
@@ -90,7 +107,7 @@ def _fixture(monkeypatch, output, runs=4):
     expected = {"train": 4, "dev": 4, "holdout": 4}
     monkeypatch.setattr(trial, "SPLIT_FRAMES", expected)
     monkeypatch.setattr(trial, "SpatialAlignmentDataset", Dataset)
-    monkeypatch.setattr(trial, "collate_spatial_alignment", collate)
+    monkeypatch.setattr(evaluation, "collate_spatial_alignment", collate)
     monkeypatch.setattr(
         trial, "load_grounded_alignment_backbones", lambda _: (_Vision(), _Language(), {"vision": {}})
     )
@@ -178,9 +195,9 @@ def test_shuffling_priors_does_not_shuffle_the_source_features_or_targets():
     proposals = _Prior.predict(features)
     labels = torch.eye(4, dtype=torch.bool)
     targets = proposals + 0.01
-    data = trial._Encoded(features, proposals, labels, targets, ("A", "A", "B", "B"))
+    data = evaluation._Encoded(features, proposals, labels, targets, ("A", "A", "B", "B"))
     indices = torch.arange(4)
-    order = torch.tensor(trial.shuffled_by_recording(data.recordings))
+    order = torch.tensor(evaluation.shuffled_by_recording(data.recordings))
     source, wrong, present, same_targets = data.batch(indices, "spatial_proposals", order)
     assert torch.equal(source, features)
     assert torch.equal(present, labels) and torch.equal(same_targets, targets)
@@ -226,3 +243,73 @@ def test_report_write_failure_does_not_leave_a_passed_receipt(tmp_path, monkeypa
     assert "injected report write failure" in result["report_error"]
     assert result["optimizer_steps_completed"] == 2
     assert json.loads((root / "result.json").read_text())["status"] == "failed"
+
+
+
+def test_fresh_run_reopens_the_pinned_pack_and_shows_the_declared_gallery_seed(tmp_path, monkeypatch):
+    opened = _fixture(monkeypatch, tmp_path)
+    evidence = {"manifest_hash": "e" * 64}
+    gallery = {}
+
+    def admit(original, candidate):
+        assert (original, candidate) == ("data", "fresh") and not opened
+        return evidence
+
+    def publish(path, data_root, manifest, variants):
+        assert data_root == "fresh" and manifest is evidence
+        assert opened == ["train", "dev", "holdout"]
+        assert len(list(path.parent.glob("*.safetensors"))) == 4
+        gallery.update(variants)
+        path.write_text("gallery")
+
+    monkeypatch.setattr(trial, "read_fresh_spatial_holdout", admit)
+    monkeypatch.setattr(trial, "write_localization_gallery", publish)
+    root, result = trial.run_proposal_alignment(
+        "data", "models", "prior", tmp_path,
+        revision="a" * 40, expected_prior_result_sha256="b" * 64,
+        recipe=trial.ProposalRecipe(1, 2, (1, 0)), fresh_holdout_root="fresh",
+    )
+    assert result["status"] == "passed", result.get("error")
+    assert result["scope"] == trial.FRESH_SCOPE
+    manifest = json.loads((root / "manifest.json").read_text())
+    assert manifest["gallery_seed"] == 1 and manifest["fresh_holdout_manifest_hash"] == "e" * 64
+    direct, fixed, roi = list(gallery.values())
+    assert direct.threshold == result["direct_spatial"]["dev_threshold"] == -0.75
+    assert fixed.threshold == result["runs"][0]["dev_thresholds"]["decoder"]["threshold"]
+    assert roi.threshold == result["runs"][1]["dev_thresholds"]["decoder"]["threshold"]
+    assert direct.scores.shape == fixed.scores.shape == roi.scores.shape == (4, 4)
+    for row in result["runs"]:
+        assert row["checkpoint_metadata"]["memory_mode"] == "roi_tokens"
+        assert row["checkpoint_metadata"]["fresh_holdout_manifest_hash"] == "e" * 64
+    assert "Fresh OpenScene" in (root / "report.html").read_text()
+    assert result["gallery"] == "gallery.html"
+
+
+def test_rejects_bad_fresh_pack_before_training_on_old_pack(tmp_path, monkeypatch):
+    opened = _fixture(monkeypatch, tmp_path)
+
+    def reject(*args):
+        raise ValueError("Fresh holdout has repeated pixels")
+
+    monkeypatch.setattr(trial, "read_fresh_spatial_holdout", reject)
+    _, result = trial.run_proposal_alignment(
+        "data", "models", "prior", tmp_path,
+        revision="a" * 40, expected_prior_result_sha256="b" * 64, fresh_holdout_root="fresh",
+    )
+    assert result["status"] == "failed" and "repeated pixels" in result["error"]
+    assert result["optimizer_steps_completed"] == 0 and opened == []
+
+
+def test_direct_control_shuffles_head_outputs_not_labels_or_threshold():
+    features = torch.linspace(0, 1, 32).reshape(4, 1, 1, 2, 4)
+    boxes = _Prior.predict(features)
+    labels = torch.eye(4, dtype=torch.bool)
+    targets = boxes.clone()
+    scores = torch.where(labels, 2.0, 0.25)
+    heldout = evaluation._Encoded(features, boxes, labels, targets, ("A", "A", "B", "B"), scores)
+    reference, gallery = evaluation.evaluate_direct_spatial(heldout, threshold=1.0)
+    measured, swapped = reference["holdout"], reference["holdout_shuffled_images_same_labels"]
+    assert measured["macro_roc_auc"] == measured["macro_balanced_accuracy"] == measured["macro_positive_iou"] == 1.0
+    assert swapped["recall"] == 0 and swapped["specificity"] == pytest.approx(2 / 3)
+    assert swapped["macro_positive_iou"] < 1 and gallery.threshold == 1.0
+    torch.testing.assert_close(torch.from_numpy(gallery.scores), scores)

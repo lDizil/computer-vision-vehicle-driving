@@ -10,7 +10,7 @@ from torch import Tensor
 
 from hybrid_drive.assets.files import check_components
 from hybrid_drive.contracts._validation import finite_real
-from hybrid_drive.neural.spatial_loc import SpatialLocProbe
+from hybrid_drive.neural.spatial_loc import SpatialLocOutput, SpatialLocProbe
 from .bounded_io import decode_json, read_bounded, require_hex, require_keys
 from .neural_checkpoint import SCHEMA as NEURAL_WEIGHTS_SCHEMA, load_neural_weights, module_state_hash
 from .protocol import content_hash
@@ -43,7 +43,12 @@ class FrozenSpatialPriorSource:
 
     @torch.no_grad()
     def predict(self, feature_maps: Tensor) -> Tensor:
-        """Return [B,4,4] normalized xyxy boxes in batch and left-to-right band order."""
+        """Return the four normalized proposals, without applying dev confidence gating."""
+        return self.predict_spatial(feature_maps).boxes_xyxy
+
+    @torch.no_grad()
+    def predict_spatial(self, feature_maps: Tensor) -> SpatialLocOutput:
+        """Return the frozen head's raw scores and boxes for a direct baseline."""
         if (
             not isinstance(feature_maps, Tensor)
             or feature_maps.ndim != 5
@@ -54,7 +59,16 @@ class FrozenSpatialPriorSource:
         ):
             raise ValueError("Expected CPU float32 feature maps [B,1,384,H,W]")
 
-        boxes = self._probe(feature_maps[:, 0]).boxes_xyxy
+        prediction = self._probe(feature_maps[:, 0])
+        scores, boxes = prediction.presence_logits, prediction.boxes_xyxy
+        if (
+            scores.shape != (len(feature_maps), _BANDS)
+            or scores.dtype != feature_maps.dtype
+            or scores.device != feature_maps.device
+            or not torch.isfinite(scores).all()
+        ):
+            raise ValueError("Expected four finite direct presence logits per frame")
+
         if (
             boxes.shape != (len(feature_maps), _BANDS, 4)
             or boxes.dtype != feature_maps.dtype
@@ -68,7 +82,7 @@ class FrozenSpatialPriorSource:
         lower = torch.arange(_BANDS, device=boxes.device, dtype=boxes.dtype) / _BANDS
         if ((centers_x < lower) | (centers_x >= lower + 1 / _BANDS)).any():
             raise ValueError("Prior box centers must preserve left-to-right quarter order")
-        return boxes
+        return prediction
 
 
 def load_spatial_prior_source(

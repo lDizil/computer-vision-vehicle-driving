@@ -349,3 +349,40 @@ def test_swapping_prior_quarters_is_rejected(probe_inputs):
     boxes = fixed_quarter_boxes(features).flip(1)
     with pytest.raises(ValueError, match="left-to-right quarter order"):
         probe(features, boxes, language)
+
+
+
+def test_isolated_roi_tokens_are_the_only_inputs_to_both_attention_memories(probe_inputs):
+    _, language, features = probe_inputs
+    probe = GroundedLocProbe(language, visual_dim=4, hidden_dim=8, memory_mode="roi_tokens")
+    observed = {}
+    for name in ("projector", "decoder"):
+        getattr(probe, name).register_forward_pre_hook(
+            lambda _, args, key=name: observed.update({key: args})
+        )
+    tokens = []
+    probe.tokenizer.register_forward_hook(lambda _, args, out: tokens.append(out.tokens))
+    prediction = probe(features, fixed_quarter_boxes(features), language)
+    assert len(observed["projector"]) == 2
+    for name in ("projector", "decoder"):
+        bank, mask = observed[name][:2]
+        assert bank is tokens[0] and bank.shape == (2, 4, 4) and mask.all()
+    loss = supervised_grounded_loc_loss(Reason2DriveLoss(), prediction, language, *_targets())
+    loss.text.backward()
+    assert torch.count_nonzero(probe.tokenizer.spatial_pool.weight.grad)
+    assert torch.count_nonzero(probe.projector.visual_projection.weight.grad)
+    assert probe.projector.prior_projection.weight.grad is None
+    assert all(p.grad is None for p in language.parameters())
+
+
+def test_patches_cannot_bypass_the_isolated_token_bank(probe_inputs):
+    _, language, features = probe_inputs
+    probe = GroundedLocProbe(language, visual_dim=4, hidden_dim=8, memory_mode="roi_tokens").eval()
+    boxes = fixed_quarter_boxes(features)
+    with torch.no_grad():
+        probe.tokenizer.fusion[-1].weight.zero_()
+        probe.tokenizer.fusion[-1].bias.zero_()
+        left = grounded_presence_scores(probe(features, boxes, language), language)
+        right = grounded_presence_scores(probe(-features, boxes, language), language)
+    for a, b in zip(left, right):
+        torch.testing.assert_close(a, b, atol=0, rtol=0)
