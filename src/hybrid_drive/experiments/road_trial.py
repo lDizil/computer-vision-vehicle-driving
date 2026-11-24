@@ -46,8 +46,8 @@ def fit_roads(capture: Path, train_targets: Path, dev_targets: Path, output: Pat
     output.mkdir(parents=True)
     arms = {}
     for arm in ARMS:
-        model, losses = _fit_arm(train, labels, mask, weights, arm, epochs)
-        guesses = _predict_arrays(model, dev, arm)
+        model, losses = fit_captured_road_head(train, labels, mask, weights, arm, epochs)
+        guesses = predict_captured_road_head(model, dev, arm)
         thresholds, validation = {}, {}
         for i, name in enumerate(LAYERS):
             thresholds[name], validation[name] = select_cut(guesses[:, i], yd.labels[:, i], dev_support, name)
@@ -67,7 +67,8 @@ def fit_roads(capture: Path, train_targets: Path, dev_targets: Path, output: Pat
     })
 
 
-def _fit_arm(capture, labels, mask, weights, arm, epochs):
+def fit_captured_road_head(capture, labels, mask, weights, arm, epochs):
+    """Fit a road head with a fixed initialization, sampler and optimizer recipe."""
     with torch.random.fork_rng(devices=[]):
         torch.random.default_generator.manual_seed(SEED)
         model = RoadGeometryHead(capture.values.shape[1])
@@ -104,7 +105,8 @@ def _inputs(values, arm):
 
 
 @torch.no_grad()
-def _predict_arrays(model, capture, arm):
+def predict_captured_road_head(model, capture, arm):
+    """Materialize two road probability layers in capture order."""
     return np.concatenate([
         model(_inputs(capture.values[j:j+1], arm)).sigmoid().cpu().numpy()
         for j in range(len(capture.observations))
@@ -125,7 +127,7 @@ def predict_roads(capture: Path, fitted: Path, box_predictions: Path, output: Pa
     routing = []
     for arm in ARMS:
         model = _load_model(fitted, fit, arm)
-        probs = _predict_arrays(model, test, arm)
+        probs = predict_captured_road_head(model, test, arm)
         results[arm] = {"probabilities":probs.tolist(), "thresholds":fit["arms"][arm]["thresholds"]}
         if arm == "vision":
             for obs, pred, visible, original in zip(test.observations, probs, test.coverage, frozen, strict=True):
