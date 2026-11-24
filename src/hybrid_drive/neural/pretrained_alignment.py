@@ -56,6 +56,24 @@ def load_alignment_backbones(asset_root):
     return _load_alignment_backbones(asset_root, _PROMPT, _encode_prompt)
 
 
+_SCENE_BRIDGE_PROMPT = "In the projected scene, is the selected candidate blocked? LOC"
+
+
+def load_scene_bridge_backbones(asset_root):
+    """Frozen visual and causal backbones for an uncalibrated scene handoff probe."""
+    def encode(tokenizer):
+        _validate_token_aliases(tokenizer)
+        ids = tokenizer.encode(_SCENE_BRIDGE_PROMPT, add_special_tokens=False)
+        loc = _TOKEN_ALIASES[" LOC"]
+        if not ids or ids[-1] != loc or ids.count(loc) != 1 or any(
+            type(token) is not int or not 0 <= token < _VOCAB_SIZE for token in ids
+        ):
+            raise ValueError("Expected one consumed LOC at the end of the scene probe")
+        return ids
+
+    return _load_alignment_backbones(asset_root, _SCENE_BRIDGE_PROMPT, encode)
+
+
 def load_grounded_alignment_backbones(asset_root):
     """Load the same frozen assets with the four-quarter LOC prompt."""
     vision, language, provenance = _load_alignment_backbones(asset_root, _GROUNDED_PROMPT, _encode_grounded_prompt)
