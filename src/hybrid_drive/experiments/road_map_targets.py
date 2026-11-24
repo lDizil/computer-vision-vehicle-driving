@@ -9,6 +9,7 @@ from hashlib import sha256
 from math import cos, isfinite, sin
 import os
 from pathlib import Path
+import re
 import tempfile
 from zipfile import ZipFile
 
@@ -226,15 +227,18 @@ def _load_vector_map(obj):
     canvas = _real_values(obj["canvas_edge"], 2, "canvas_edge")
     if min(canvas) <= 0:
         raise ValueError("Expected a positive map canvas")
-    nodes = _token_index(obj["node"], "node")
-    polygons = _token_index(obj["polygon"], "polygon")
-    lines = _token_index(obj["line"], "line")
+    nodes = _map_token_index(obj["node"], "node")
+    polygons = _map_token_index(obj["polygon"], "polygon")
+    lines = _map_token_index(obj["line"], "line")
 
     def coords(tokens):
         return [_real_values((nodes[t]["x"], nodes[t]["y"]), 2, "map node") for t in tokens]
 
     drivable, repaired = [], 0
-    for token in sorted({token for rec in obj["drivable_area"] for token in rec["polygon_tokens"]}):
+    tokens = {token for rec in obj["drivable_area"] for token in rec["polygon_tokens"]}
+    if tokens - polygons.keys():
+        raise ValueError("Drivable layer references missing polygons")
+    for token in sorted(tokens, key=lambda value: "" if value is None else value):
         record = polygons[token]
         exterior = coords(record["exterior_node_tokens"])
         holes = [coords(rec["node_tokens"]) for rec in record["holes"] if rec["node_tokens"]]
@@ -257,6 +261,29 @@ def _load_vector_map(obj):
     # inside the drivable surface. Real polygon holes stay excluded.
     dissolved = list(_polygon_components(union_all(drivable)))
     return _VectorMap(canvas, STRtree(dissolved), STRtree(dividers), repaired)
+
+
+_MAP_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}")
+
+
+def _map_token_index(records, layer):
+    result = {}
+    for record in records:
+        token = record["token"]
+        # v1.3 includes a unique null polygon referenced by real drivable
+        # records in Queenstown and Holland Village. The empty placeholder
+        # in One North has no geometry and is not a usable polygon.
+        if (layer == "polygon" and token == "" and not record["exterior_node_tokens"]
+                and not record["holes"]):
+            continue
+        if not (layer == "polygon" and token is None) and (
+            not isinstance(token, str) or _MAP_UUID.fullmatch(token) is None
+        ):
+            raise ValueError(f"Invalid {layer} identifier in the nuScenes vector map")
+        if token in result:
+            raise ValueError(f"Duplicate {layer} identifier in the nuScenes vector map")
+        result[token] = record
+    return result
 
 
 def _polygon_components(geometry):

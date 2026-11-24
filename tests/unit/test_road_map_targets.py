@@ -26,20 +26,24 @@ class Grid:
         return np.meshgrid([1.0, 3.0], [1.0, 3.0], indexing="ij")
 
 
-def _world_map(*, canvas=(9, 9), lane=((5.5, 2.2), (5.5, 5.8))):
+def _map_id(n):
+    return f"00000000-0000-4000-8000-{n:012x}"
+
+
+def _world_map(*, canvas=(9, 9), lane=((5.5, 2.2), (5.5, 5.8)), polygon_token=_map_id(98)):
     points = [(2, 2), (6.5, 2), (6.5, 6), (2, 6), (2.5, 4.5), (2.5, 5.5), (3.5, 5.5), (3.5, 4.5), *lane]
-    nodes = [{"token": str(i), "x": x, "y": y} for i, (x, y) in enumerate(points)]
+    nodes = [{"token": _map_id(i), "x": x, "y": y} for i, (x, y) in enumerate(points)]
     return {
         "version": "1.3",
         "canvas_edge": list(canvas),
         "node": nodes,
         "polygon": [{
-            "token": "street", "exterior_node_tokens": ["0", "1", "2", "3"],
-            "holes": [{"node_tokens": ["4", "5", "6", "7"]}],
+            "token": polygon_token, "exterior_node_tokens": [_map_id(i) for i in range(4)],
+            "holes": [{"node_tokens": [_map_id(i) for i in range(4, 8)]}],
         }],
-        "line": [{"token": "line", "node_tokens": [str(i) for i in range(8, len(nodes))]}],
-        "drivable_area": [{"polygon_tokens": ["street"]}],
-        "lane_divider": [{"line_token": "line"}],
+        "line": [{"token": _map_id(99), "node_tokens": [_map_id(i) for i in range(8, len(nodes))]}],
+        "drivable_area": [{"polygon_tokens": [polygon_token]}],
+        "lane_divider": [{"line_token": _map_id(99)}],
     }
 
 
@@ -159,3 +163,21 @@ def test_publish_mountable_labels_and_verify_npz_receipts(tmp_path, monkeypatch)
             np.testing.assert_array_equal(data["labels"][0, 0], [[True, True], [True, False]])
     with pytest.raises(ValueError, match="already exists"):
         roads.prepare_road_map_targets(capture, tmp_path / "mini.tgz", maps, sha, output)
+
+
+
+def test_provider_null_polygon_keeps_geometry_and_an_empty_placeholder_does_not():
+    pytest.importorskip("shapely")
+    obj = _world_map(polygon_token=None)
+    obj["polygon"].extend([{"token": "", "exterior_node_tokens": [], "holes": []},
+                           {**obj["polygon"][0], "token": _map_id(98)}])
+    obj["drivable_area"].append({"polygon_tokens": [_map_id(98)]})
+    labels, _ = roads._rasterize(roads._load_vector_map(obj), Grid(), (6.0, 2.0, pi / 2))
+    np.testing.assert_array_equal(labels[0], [[True, True], [True, False]])
+
+
+def test_vector_identifiers_are_not_mini_sample_ids_and_duplicate_null_is_rejected():
+    with pytest.raises(ValueError, match="Invalid"):
+        roads._map_token_index([{"token": "a"*32}],"node")
+    with pytest.raises(ValueError, match="Duplicate"):
+        roads._map_token_index([{"token":None},{"token":None}],"polygon")
