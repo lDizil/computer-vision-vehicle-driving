@@ -1,0 +1,86 @@
+{
+  "dataset": "OpenScene v1.1 Mini",
+  "dataset_revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+  "publisher_mapping_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_0-31.json",
+  "publisher_mapping_sha256": "7c8a6cded3b688d252c070879afc008101c0f3e1576a3ad8de696748451c6075",
+  "metadata_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be"
+  },
+  "schema": "hybrid-drive-frozen-transfer-sources-v1",
+  "recording_id_rule": "day-and-vehicle, disjoint from prior OpenScene recordings",
+  "selection": "24 timeline-uniform and up to 12 current-frame vulnerable corridor windows per recording, minimum 4 seconds between anchors",
+  "camera_archives": {
+    "24": {
+      "filename": "openscene_sensor_mini_camera_24.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_24.tgz",
+      "size_bytes": 2948986828,
+      "sha256": "93dd2af54f15c82cb799f84e9ce25759d4f068b33c0ad25b32b57309117c5df4",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "26": {
+      "filename": "openscene_sensor_mini_camera_26.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_26.tgz",
+      "size_bytes": 2915941730,
+      "sha256": "f1168aadf5aa5ba422cc5188ab598af8af4b411fa06b3dcd2636cd8c1266c56e",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    }
+  },
+  "previous_recordings": [
+    "2021.05.12.23.36.44_veh-35",
+    "2021.06.07.18.53.26_veh-26",
+    "2021.06.09.14.03.17_veh-12",
+    "2021.06.09.14.58.55_veh-35",
+    "2021.06.09.17.23.18_veh-38",
+    "2021.06.14.16.32.09_veh-35",
+    "2021.06.14.18.42.45_veh-12",
+    "2021.06.14.19.22.11_veh-38",
+    "2021.06.23.16.54.19_veh-35",
+    "2021.06.23.17.31.36_veh-16",
+    "2021.07.16.20.45.29_veh-35",
+    "2021.07.24.23.50.16_veh-17",
+    "2021.08.09.17.55.59_veh-28",
+    "2021.08.24.13.12.55_veh-45",
+    "2021.08.30.14.54.34_veh-40",
+    "2021.10.01.19.16.42_veh-28",
+    "2021.10.05.07.10.04_veh-52",
+    "2021.10.06.17.43.07_veh-28",
+    "2021.10.11.02.57.41_veh-50",
+    "2021.10.11.07.12.18_veh-50"
+  ],
+  "logs": [
+    {
+      "log_name": "2021.06.03.12.02.06_veh-35_00233_00609",
+      "recording": "2021.06.03.12.02.06_veh-35",
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.03.12.02.06_veh-35_00233_00609.pkl",
+      "camera_shard": 24,
+      "size_bytes": 12989209,
+      "sha256": "1c90ded7b2959d115154b4e8b419ad9495c5144713b76d4afe1bcb4007781c4b"
+    },
+    {
+      "log_name": "2021.06.07.12.54.00_veh-35_01843_02314",
+      "recording": "2021.06.07.12.54.00_veh-35",
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.07.12.54.00_veh-35_01843_02314.pkl",
+      "camera_shard": 24,
+      "size_bytes": 21397197,
+      "sha256": "4a2860751a0425b93c77f63abd7ab61c11500d32c3ee90b06e30cd8187a17a68"
+    },
+    {
+      "log_name": "2021.06.28.15.02.02_veh-38_02398_02848",
+      "recording": "2021.06.28.15.02.02_veh-38",
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.28.15.02.02_veh-38_02398_02848.pkl",
+      "camera_shard": 26,
+      "size_bytes": 14660612,
+      "sha256": "f22c73d8a53eb23383f0b473f709bfdc089cc1acac055a0d09519ad2d95fffc0"
+    },
+    {
+      "log_name": "2021.08.17.16.57.11_veh-08_01200_01636",
+      "recording": "2021.08.17.16.57.11_veh-08",
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.17.16.57.11_veh-08_01200_01636.pkl",
+      "camera_shard": 26,
+      "size_bytes": 5572301,
+      "sha256": "fe90ceb1eff62d5497ed57f3e752a41bb0138b7960a83eb0578d31d3d632ba57"
+    }
+  ]
+}
