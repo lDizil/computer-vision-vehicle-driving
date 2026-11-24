@@ -42,6 +42,11 @@ class SceneSlowPrefix(nn.Module):
         return SceneLanguageProbe(candidate_id,tokens.scene_sha256,prefix,values,int(active.sum()))
 
     def project(self,tokens,candidate_id):
+        active=self.candidate_mask(tokens,candidate_id)
+        return self.projector(tokens.visual_tokens,tokens.visual_mask,tokens.prior_tokens,active),active
+
+    @staticmethod
+    def candidate_mask(tokens,candidate_id):
         candidate_id=identifier(candidate_id,"candidate_id")
         memory=tokens.prior_tokens
         if (memory.ndim!=3 or memory.shape[0]!=1 or len(tokens.records)!=memory.shape[1]
@@ -59,4 +64,4 @@ class SceneSlowPrefix(nn.Module):
                            dtype=torch.bool,device=memory.device)
         if not (active[0] & poses).any():
             raise ValueError("No valid pose tokens for the selected candidate")
-        return self.projector(tokens.visual_tokens,tokens.visual_mask,memory,active),active
+        return active

@@ -4,6 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 import torch
 from torch import Tensor, nn
+from torch.nn import functional as F
 
 from hybrid_drive.assets.alignment_models import verify_alignment_models, verify_alignment_vision
 
@@ -264,6 +265,23 @@ class _PythiaPrefix(nn.Module):
         return self._prompt.expand(batch_size, -1).clone()
 
     def forward(self, prefix, consumed_ids):
+        hidden = self._consumed_hidden(prefix, consumed_ids)
+        logits = self.backbone.get_output_embeddings()(hidden)
+        if logits.shape != (*consumed_ids.shape, self.vocab_size):
+            raise ValueError("Pythia logits do not match the pinned vocabulary")
+        return hidden, logits
+
+    def binary_answer_logits(self, prefix):
+        """Score the pinned yes/no tokens at the final prompt position only."""
+        if not isinstance(prefix, Tensor) or prefix.ndim != 3 or prefix.shape[0] < 1:
+            raise ValueError("Expected a nonempty rank-three answer prefix")
+        hidden = self._consumed_hidden(prefix, self.prompt_ids(prefix.shape[0]))[:, -1]
+        output = self.backbone.get_output_embeddings()
+        rows = [self.yes_token_id, self.no_token_id]
+        bias = None if output.bias is None else output.bias[rows]
+        return F.linear(hidden, output.weight[rows], bias)
+
+    def _consumed_hidden(self, prefix, consumed_ids):
         if (not isinstance(prefix, Tensor) or prefix.ndim != 3 or min(prefix.shape[:2]) < 1
                 or prefix.shape[2] != self.llm_dim or prefix.dtype != torch.float32
                 or prefix.device.type != "cpu" or not torch.isfinite(prefix).all()):
@@ -283,8 +301,4 @@ class _PythiaPrefix(nn.Module):
         hidden = self.backbone.gpt_neox(inputs_embeds=combined, use_cache=False, return_dict=True).last_hidden_state
         if hidden.shape != combined.shape:
             raise ValueError("Pythia hidden state must correspond to every consumed position")
-        hidden = hidden[:, query_count:]
-        logits = self.backbone.get_output_embeddings()(hidden)
-        if logits.shape != (*consumed_ids.shape, self.vocab_size):
-            raise ValueError("Pythia logits do not match the pinned vocabulary")
-        return hidden, logits
+        return hidden[:, query_count:]
