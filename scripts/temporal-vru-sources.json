@@ -1,0 +1,176 @@
+{
+  "schema": "hybrid-drive-temporal-vru-sources-v1",
+  "dataset": "OpenScene v1.1 Mini",
+  "dataset_revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+  "publisher_mapping_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_0-31.json",
+  "publisher_mapping_sha256": "7c8a6cded3b688d252c070879afc008101c0f3e1576a3ad8de696748451c6075",
+  "metadata_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be"
+  },
+  "recording_id_rule": "complete recording; day-and-vehicle disjoint across splits",
+  "selection": "Curated, not traffic prevalence: at most 12 moving, 8 quiet/fill, and 4 empty windows per recording; 3 seconds minimum separation; observations at t-0.5/t, labels at t/t+0.5/t+1 in anchor ego; complete anchor tracks only.",
+  "camera_archives": {
+    "1": {
+      "filename": "openscene_sensor_mini_camera_1.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_1.tgz",
+      "size_bytes": 2643534070,
+      "sha256": "f133603b0c1541986ff63254d6f568581f28fcf9355b293c0c0699eed3ea3cef",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "4": {
+      "filename": "openscene_sensor_mini_camera_4.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_4.tgz",
+      "size_bytes": 2101966809,
+      "sha256": "c2bdd4cb3231a49a784941700471b1c6dd50b70fd82bce5c814349cfe9d8e2be",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "19": {
+      "filename": "openscene_sensor_mini_camera_19.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_19.tgz",
+      "size_bytes": 2311055828,
+      "sha256": "fd7ab5c59c9cb0b216dac6d07f3f4cf81a5c9525ea942277fc789109ddc64359",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "23": {
+      "filename": "openscene_sensor_mini_camera_23.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_23.tgz",
+      "size_bytes": 2548375165,
+      "sha256": "e20a780dcef0eaf0eef52009f3cdefd3061c2fb82ee45da5779e60ceb83454b0",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "24": {
+      "filename": "openscene_sensor_mini_camera_24.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_24.tgz",
+      "size_bytes": 2948986828,
+      "sha256": "93dd2af54f15c82cb799f84e9ce25759d4f068b33c0ad25b32b57309117c5df4",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "26": {
+      "filename": "openscene_sensor_mini_camera_26.tgz",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_26.tgz",
+      "size_bytes": 2915941730,
+      "sha256": "f1168aadf5aa5ba422cc5188ab598af8af4b411fa06b3dcd2636cd8c1266c56e",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    }
+  },
+  "logs": [
+    {
+      "split": "train",
+      "recording": "2021.06.09.17.23.18_veh-38",
+      "log_name": "2021.06.09.17.23.18_veh-38_02526_03027",
+      "camera_shard": 4,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.09.17.23.18_veh-38_02526_03027.pkl",
+      "size_bytes": 27260672,
+      "sha256": "f49beccde6d6f4c003b0edb0f8f0f481d903a49627d94f94183fb6e01f91270f",
+      "frame_count": 1002
+    },
+    {
+      "split": "train",
+      "recording": "2021.08.24.13.12.55_veh-45",
+      "log_name": "2021.08.24.13.12.55_veh-45_00386_00472",
+      "camera_shard": 4,
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.24.13.12.55_veh-45_00386_00472.pkl",
+      "size_bytes": 918499,
+      "sha256": "48e18efce844e832b02fe5d8148d51566832a7304aacda6f2ce0ccc9ef791537",
+      "frame_count": 172
+    },
+    {
+      "split": "train",
+      "recording": "2021.06.23.16.54.19_veh-35",
+      "log_name": "2021.06.23.16.54.19_veh-35_00808_01256",
+      "camera_shard": 19,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.23.16.54.19_veh-35_00808_01256.pkl",
+      "size_bytes": 19720521,
+      "sha256": "113652abeb9ba94ee6f43150af5fa10d98d0b54b4ca3c8ec277463dc5b44b208",
+      "frame_count": 896
+    },
+    {
+      "split": "train",
+      "recording": "2021.08.09.17.55.59_veh-28",
+      "log_name": "2021.08.09.17.55.59_veh-28_00021_00307",
+      "camera_shard": 19,
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.09.17.55.59_veh-28_00021_00307.pkl",
+      "size_bytes": 5315177,
+      "sha256": "655ee18289a25c04300f2f39180c9b35f022007589e5ba05105f44726912e532",
+      "frame_count": 572
+    },
+    {
+      "split": "development",
+      "recording": "2021.06.07.18.53.26_veh-26",
+      "log_name": "2021.06.07.18.53.26_veh-26_00005_00427",
+      "camera_shard": 23,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.07.18.53.26_veh-26_00005_00427.pkl",
+      "size_bytes": 21150808,
+      "sha256": "7e5735b4923ba58f8ff4d2d13d5bd1ab1ce814000affb338b02bfc2bc9bda7ec",
+      "frame_count": 844
+    },
+    {
+      "split": "development",
+      "recording": "2021.06.23.17.31.36_veh-16",
+      "log_name": "2021.06.23.17.31.36_veh-16_00016_00377",
+      "camera_shard": 23,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.23.17.31.36_veh-16_00016_00377.pkl",
+      "size_bytes": 16113948,
+      "sha256": "f7c3cb3f94ffea926ea2cf83c3df65f69f1cac63f23672d0fce1778ae7c5dd92",
+      "frame_count": 722
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.06.03.12.02.06_veh-35",
+      "log_name": "2021.06.03.12.02.06_veh-35_00233_00609",
+      "camera_shard": 24,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.03.12.02.06_veh-35_00233_00609.pkl",
+      "size_bytes": 12989209,
+      "sha256": "1c90ded7b2959d115154b4e8b419ad9495c5144713b76d4afe1bcb4007781c4b"
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.06.07.12.54.00_veh-35",
+      "log_name": "2021.06.07.12.54.00_veh-35_01843_02314",
+      "camera_shard": 24,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.07.12.54.00_veh-35_01843_02314.pkl",
+      "size_bytes": 21397197,
+      "sha256": "4a2860751a0425b93c77f63abd7ab61c11500d32c3ee90b06e30cd8187a17a68"
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.06.28.15.02.02_veh-38",
+      "log_name": "2021.06.28.15.02.02_veh-38_02398_02848",
+      "camera_shard": 26,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.28.15.02.02_veh-38_02398_02848.pkl",
+      "size_bytes": 14660612,
+      "sha256": "f22c73d8a53eb23383f0b473f709bfdc089cc1acac055a0d09519ad2d95fffc0"
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.08.17.16.57.11_veh-08",
+      "log_name": "2021.08.17.16.57.11_veh-08_01200_01636",
+      "camera_shard": 26,
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.17.16.57.11_veh-08_01200_01636.pkl",
+      "size_bytes": 5572301,
+      "sha256": "fe90ceb1eff62d5497ed57f3e752a41bb0138b7960a83eb0578d31d3d632ba57"
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.10.05.07.10.04_veh-52",
+      "log_name": "2021.10.05.07.10.04_veh-52_01442_01802",
+      "camera_shard": 1,
+      "member": "openscene-v1.1/meta_datas/mini/2021.10.05.07.10.04_veh-52_01442_01802.pkl",
+      "size_bytes": 2606384,
+      "sha256": "82dc45a405f75d59b6db057f187a7d352df1bb99793c96a0474be50eb5922840",
+      "frame_count": 720
+    },
+    {
+      "split": "heldout",
+      "recording": "2021.10.01.19.16.42_veh-28",
+      "log_name": "2021.10.01.19.16.42_veh-28_02011_02410",
+      "camera_shard": 1,
+      "member": "openscene-v1.1/meta_datas/mini/2021.10.01.19.16.42_veh-28_02011_02410.pkl",
+      "size_bytes": 11949737,
+      "sha256": "f1b5ecd0b3293a0b6161c3a4eb985a09339e8f35762d1bce560d62ed21cbfa07",
+      "frame_count": 798
+    }
+  ]
+}
