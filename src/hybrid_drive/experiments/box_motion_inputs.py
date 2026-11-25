@@ -44,7 +44,10 @@ def load_motion_inputs(root: Path) -> dict:
     return index
 
 
-def load_motion_snapshot(root: Path, token: str, entry: dict) -> CameraSnapshot:
+def load_motion_snapshot(root: Path, token: str, entry: dict, *, rectified_wh=(384, 216)) -> CameraSnapshot:
+    if (not isinstance(rectified_wh, tuple) or len(rectified_wh) != 2
+            or any(type(n) is not int or not 4 <= n <= native for n, native in zip(rectified_wh, (1920, 1080)))):
+        raise ValueError("Rectified width/height must fit the native OpenScene camera")
     views = entry["views"]
     if tuple(view["camera"] for view in views) != CAMERAS:
         raise ValueError("OpenScene six-camera order changed")
@@ -62,7 +65,7 @@ def load_motion_snapshot(root: Path, token: str, entry: dict) -> CameraSnapshot:
             rgb = np.asarray(file)
         pixels, calib = _rectify_native_openscene_rgb(
             view["camera"], rgb, view["intrinsic"], view["camera_to_ego_rotation"],
-            view["camera_to_ego_translation"], view["distortion"], 384, 216,
+            view["camera_to_ego_translation"], view["distortion"], *rectified_wh,
         )
         result.append(SurroundView(direction, calib, pixels))
     return CameraSnapshot(token, entry["ref_time_us"], entry["ego_to_world"], None, result,
