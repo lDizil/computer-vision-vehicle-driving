@@ -68,9 +68,15 @@ class _Clip:
 def plan_clip_corpus(metadata_archive: Path, source_path: Path, output: Path) -> dict:
     """Publish a metadata-only plan; its path must not already exist."""
     _require_linux()
+    output = Path(output)
+    check_components(output)
+    if output.exists():
+        raise PreparationError("Clip plan output must not already exist")
     source = _load_source(source_path)
     plan = _plan(metadata_archive, source)
     payload = canonical_json(plan) + b"\n"
+    if len(payload) > _PLAN_LIMIT:
+        raise PreparationError("Clip plan exceeds its artifact byte budget")
     with AtomicFile(output) as staged:
         staged.out.write(payload)
         staged.commit()
@@ -102,18 +108,24 @@ def prepare_clip_corpus(metadata_archive: Path, camera_root: Path, source_path: 
                  "anchors": anchors, "frames": frames}
         _validate_index(index)
         raw = canonical_json(index) + b"\n"
+        if len(raw) > INDEX_LIMIT:
+            raise PreparationError("Clip inputs exceed their artifact byte budget")
         (inputs / "index.json").write_bytes(raw)
         digest = sha256(raw).hexdigest()
         labels = {"schema": LABEL_SCHEMA, "input_sha256": digest, "rows": rows}
         _validate_labels(labels, index, digest)
+        truth = canonical_json(labels) + b"\n"
+        if len(truth) > LABEL_LIMIT:
+            raise PreparationError("Clip labels exceed their artifact byte budget")
         label_path = stage / "labels" / "labels.json"
         label_path.parent.mkdir()
-        label_path.write_bytes(canonical_json(labels) + b"\n")
+        label_path.write_bytes(truth)
         check_components(output)
         if output.exists():
             raise PreparationError("Clip corpus output appeared during preparation")
         stage.rename(output)
-    return {**plan["summary"], "plan_sha256": plan_sha, "input_sha256": digest, "camera_jpegs": len(frames) * len(CAMERAS)}
+    return {**plan["summary"], "plan_sha256": plan_sha, "input_sha256": digest,
+            "labels_sha256": sha256(truth).hexdigest(), "camera_jpegs": len(frames) * len(CAMERAS)}
 
 
 def load_clip_inputs(input_root: Path) -> dict:

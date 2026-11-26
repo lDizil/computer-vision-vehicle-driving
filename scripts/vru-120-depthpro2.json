@@ -1,0 +1,26 @@
+{
+  "schema": "hybrid-drive-vru-120-depthpro2-v1",
+  "model": "depthpro2-s",
+  "repository": "apple/DepthPro2-coreml",
+  "revision": "4e607a682f993bbf95035054fc78ba9ffc81faf2",
+  "license": "apple-amlr",
+  "license_url": "https://huggingface.co/apple/DepthPro2-coreml/blob/4e607a682f993bbf95035054fc78ba9ffc81faf2/LICENSE",
+  "directory": "depthpro2-s_w4.mlpackage",
+  "function": "res_640x360",
+  "rgb_wh": [640, 360],
+  "temporal_window": 4,
+  "files": {
+    "Manifest.json": {
+      "size_bytes": 617,
+      "sha256": "13f6b10d8e6888a82c235fbe74e02f4c514c63d91c509da0777e2fc310aa69c1"
+    },
+    "Data/com.apple.CoreML/model.mlmodel": {
+      "size_bytes": 1515717,
+      "sha256": "ebd01de2bc689c93fd51c6d7f3495eb65f1d31e2de8a6c0435eedc5ceee1ea8f"
+    },
+    "Data/com.apple.CoreML/weights/weight.bin": {
+      "size_bytes": 51437056,
+      "sha256": "24b741e5608cbdd99bc2b26d4925c410b2d415637c36b1c0b51050af9c9be1db"
+    }
+  }
+}

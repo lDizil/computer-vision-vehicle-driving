@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from hybrid_drive.experiments.vru_metric_detector import DepthSample, depth_sample, metric_hit
+from hybrid_drive.experiments.vru_clip_replay import _capture_window, _validate_comparable_cameras
 from hybrid_drive.geometry.camera import CameraCalibration
 from hybrid_drive.geometry.rigid import invert_pose
 
@@ -34,3 +35,13 @@ def test_axial_depth_is_not_euclidean_distance_or_an_intersection_with_z_zero():
     assert result.camera_xyz == (1., -.5, 1.6)
     assert result.detection_id == "v0-b0"
     assert metric_hit(view, box, DepthSample(40., .2), detection_id="v0-b0") is None
+
+
+def test_capture_produces_the_groups_required_by_the_comparability_guard():
+    anchor = {"sample_token": "now", "previous_token": "past", "older_token": "old", "recording": "r"}
+    index = {"frames": dict.fromkeys(("now", "past", "old"), {})}
+    shot = SimpleNamespace(content_sha256="ab"*32)
+    fresh = _capture_window(anchor, index, None, lambda _: ({"plane": (), "metric": ()}, []),
+                            lambda *args, **kwargs: shot)
+    previous = {"observations": {when: {"sha256": shot.content_sha256} for when in ("older", "previous", "current")}}
+    _validate_comparable_cameras(fresh, previous)

@@ -47,6 +47,17 @@ def test_lowest_bytes_feasible_shards_not_fewest_shards():
     archives = {"1": {"size_bytes": 4}, "2": {"size_bytes": 6}, "3": {"size_bytes": 11}}
     result = data._select(pricey + cheap, archives)
     assert {clip.shard for clip, _ in result} == {"1", "2"}
+    assert data._select(list(reversed(cheap + pricey)), archives) == result
+
+
+def test_cap_and_a_sixth_group_are_enforced_even_when_five_can_fill_the_bands():
+    options = [_clip(group, j, (0, 1, 2)) for group in range(1, 8) for j in range(30)]
+    result = data._assign(data._slots(options))
+    assert result is not None
+    counts = Counter(clip.group for clip, _ in result)
+    assert len(counts) >= 6
+    assert max(counts.values()) <= 24
+    assert Counter(option.band for _, option in result) == {0: 40, 1: 40, 2: 40}
 
 
 def test_spaced_slots_make_all_band_alternatives_nonoverlapping():
