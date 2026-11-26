@@ -9,7 +9,7 @@ import torch
 
 from hybrid_drive.experiments.bounded_io import read_bounded
 from hybrid_drive.experiments.object_vru_detector import (
-    COCO_CLASSES, RECTIFIED_WH, TORCHVISION_VERSION, _Tile, deduplicate_boxes, remap_box,
+    COCO_CLASSES, RECTIFIED_WH, TORCHVISION_VERSION, _Tile, _model_boxes, _project_boxes,
 )
 from hybrid_drive.experiments.object_vru_geometry import fuse_ground_hits, project_detection
 
@@ -60,8 +60,15 @@ class CoverageDetector:
                            "size_wh": list(RECTIFIED_WH), "model_min_side": MIN_SIDE, "model_max_side": MAX_SIDE,
                            "regions_per_image": REGION_BUDGET, "detections_per_image": BOX_BUDGET}
 
-    @torch.no_grad()
     def __call__(self, snapshot):
+        return self._detect(snapshot, audit=False)
+
+    def audit(self, snapshot):
+        """Return unchanged objects and trace the model's emitted VRU boxes."""
+        return self._detect(snapshot, audit=True)
+
+    @torch.no_grad()
+    def _detect(self, snapshot, *, audit):
         if len(snapshot.views) != 6 or any((v.calibration.width,v.calibration.height) != RECTIFIED_WH for v in snapshot.views):
             raise ValueError("Coverage comparison requires the original six-view rectification")
         w,h=RECTIFIED_WH
@@ -69,17 +76,12 @@ class CoverageDetector:
         for i, view in enumerate(snapshot.views):
             raster = torch.from_numpy(np.array(view.rgb)).permute(2, 0, 1).float().div_(255)
             result, = self._model([raster])
-            rows = zip(result["labels"].tolist(), result["scores"].tolist(), result["boxes"].tolist(), strict=True)
             tile = _Tile(i, 0, (0, 0, w, h))
-            proposed = deduplicate_boxes(box for label, score, row in rows
-                                         if (box := remap_box(tile, label, score, row)) is not None)
-            info = []
-            for j, item in enumerate(proposed):
-                hit = project_detection(view.calibration, view.rgb, item.xyxy, item.kind, item.confidence,
-                                        detection_id=f"v{i}-b{j}")
-                if hit is not None:
-                    hits.append(hit)
-                info.append({"kind": item.kind, "confidence": item.confidence, "xyxy": item.xyxy,
-                             "ground_projection": hit is not None})
-            boxes_by_camera.append({"camera_name": view.calibration.name, "boxes": info})
+            trace = [] if audit else None
+            kept = _project_boxes(view, i, _model_boxes(tile, result, trace), project_detection, trace)
+            hits.extend(hit for _, hit in kept if hit is not None)
+            if trace is None:
+                trace = [{"kind": item.kind, "confidence": item.confidence, "xyxy": item.xyxy,
+                          "ground_projection": hit is not None} for item, hit in kept]
+            boxes_by_camera.append({"camera_name": view.calibration.name, "boxes": trace})
         return fuse_ground_hits(tuple(hits)), boxes_by_camera
