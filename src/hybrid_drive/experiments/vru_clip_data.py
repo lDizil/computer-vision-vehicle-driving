@@ -65,15 +65,38 @@ class _Clip:
         return _group(self.recording)
 
 
+@dataclass(frozen=True)
+class _Selection:
+    per_band: int
+    min_groups: int
+    max_per_group: int
+
+    @property
+    def total(self):
+        return len(_BANDS) * self.per_band
+
+
+_CONTROL_SELECTION = _Selection(_PER_BAND, _MIN_GROUPS, _MAX_PER_GROUP)
+
+
 def plan_clip_corpus(metadata_archive: Path, source_path: Path, output: Path) -> dict:
     """Publish a metadata-only plan; its path must not already exist."""
     _require_linux()
-    output = Path(output)
+    output = _new_plan_path(output)
+    source = _load_source(source_path)
+    plan = _plan(metadata_archive, source)
+    return _publish_plan(plan, output)
+
+
+def _new_plan_path(path):
+    output = Path(path)
     check_components(output)
     if output.exists():
         raise PreparationError("Clip plan output must not already exist")
-    source = _load_source(source_path)
-    plan = _plan(metadata_archive, source)
+    return output
+
+
+def _publish_plan(plan, output):
     payload = canonical_json(plan) + b"\n"
     if len(payload) > _PLAN_LIMIT:
         raise PreparationError("Clip plan exceeds its artifact byte budget")
@@ -178,17 +201,17 @@ def _read_recordings(metadata_archive, source, only_logs=None):
         yield spec, _chronological(frames)
 
 
-def _plan(metadata_archive, source):
+def _plan(metadata_archive, source, *, selection=_CONTROL_SELECTION, schema=PLAN_SCHEMA, source_sha256=SOURCE_SHA256):
     options = [clip for spec, frames in _read_recordings(metadata_archive, source)
                for clip in _candidates(spec, frames)]
-    selected = _select(options, source["camera_archives"])
+    selected = _select(options, source["camera_archives"], selection=selection)
     clips = [{"sample_token": clip.tokens[2], "previous_token": clip.tokens[1], "older_token": clip.tokens[0],
               "recording": clip.recording, "log_name": clip.log_name, "primary_id": primary.ident}
              for clip, primary in sorted(selected, key=lambda pair: (pair[0].group, pair[0].stamp, pair[0].log_name))]
     archives = {shard: source["camera_archives"][shard] for shard in sorted({clip.shard for clip, _ in selected}, key=int)}
     groups = Counter(clip.group for clip, _ in selected)
     motion = Counter(primary.motion for _, primary in selected)
-    return {"schema": PLAN_SCHEMA, "source_sha256": SOURCE_SHA256, "clips": clips, "camera_archives": archives,
+    return {"schema": schema, "source_sha256": source_sha256, "clips": clips, "camera_archives": archives,
             "summary": {"clips": len(clips), "camera_shards": list(archives),
                         "archive_bytes": sum(spec["size_bytes"] for spec in archives.values()),
                         "groups": dict(sorted(groups.items())), "bands": _band_counts(selected),
@@ -240,7 +263,7 @@ def _center(transform, box):
     return (transform[:3, :3] @ box[:3] + transform[:3, 3])[:2].tolist()
 
 
-def _select(candidates, camera_archives):
+def _select(candidates, camera_archives, *, selection=_CONTROL_SELECTION):
     by_shard = defaultdict(list)
     for clip in candidates:
         by_shard[clip.shard].append(clip)
@@ -249,16 +272,17 @@ def _select(candidates, camera_archives):
     subsets.sort(key=lambda group: (sum(camera_archives[k]["size_bytes"] for k in group), len(group), group))
     for subset in subsets:
         available = [clip for shard in subset for clip in by_shard[shard]]
-        if len(available) < _TOTAL or len({clip.group for clip in available}) < _MIN_GROUPS:
+        if len(available) < selection.total or len({clip.group for clip in available}) < selection.min_groups:
             continue
         # Compress nearby alternatives into one slot. Any assignment of one clip
         # per slot preserves the three-second gap in every recording group.
         slots = _slots(available)
-        selected = _assign(slots)
+        selected = _assign(slots, selection=selection)
         if selected is not None:
             return selected
     by_band = Counter(option.band for clip in candidates for option in clip.options)
-    raise PreparationError(f"No exact VRU-120 selection: viable anchor-option counts before spacing {[by_band[i] for i in range(len(_BANDS))]}")
+    raise PreparationError(f"No exact VRU-{selection.total} selection: viable anchor-option counts before spacing "
+                           f"{[by_band[i] for i in range(len(_BANDS))]}")
 
 
 def _slots(available):
@@ -284,15 +308,15 @@ def _slots(available):
     return slots
 
 
-def _assign(slots):
-    if (sum(min(len(rows), _MAX_PER_GROUP) for rows in slots.values()) < _TOTAL
-            or any(sum(b in row for rows in slots.values() for row in rows) < _PER_BAND for b in range(len(_BANDS)))):
+def _assign(slots, *, selection=_CONTROL_SELECTION):
+    if (sum(min(len(rows), selection.max_per_group) for rows in slots.values()) < selection.total
+            or any(sum(b in row for rows in slots.values() for row in rows) < selection.per_band for b in range(len(_BANDS)))):
         return None
     source, sink = ("source",), ("sink",)
     network = defaultdict(dict)
     pools = {}
     for group, rows in slots.items():
-        _add_edge(network, source, ("group", group), _MAX_PER_GROUP)
+        _add_edge(network, source, ("group", group), selection.max_per_group)
         for row in rows:
             bucket = ("options", group, tuple(sorted(row)))
             pools.setdefault(bucket, []).append(row)
@@ -302,8 +326,8 @@ def _assign(slots):
         for band in bands:
             _add_edge(network, bucket, ("band", band), len(rows))
     for band in range(len(_BANDS)):
-        _add_edge(network, ("band", band), sink, _PER_BAND)
-    if _flow(network, source, sink) != _TOTAL:
+        _add_edge(network, ("band", band), sink, selection.per_band)
+    if _flow(network, source, sink) != selection.total:
         return None
     answer = []
     for bucket, rows in pools.items():
@@ -312,7 +336,7 @@ def _assign(slots):
             # Spread chosen anchors uniformly over their compatible pool.
             answer.append(rows[((2*j + 1) * len(rows)) // (2 * len(bins))][band])
     used = {clip.group for clip, _ in answer}
-    while len(used) < _MIN_GROUPS:
+    while len(used) < selection.min_groups:
         spare = next((rows[0] for group, rows in slots.items() if group not in used), None)
         if spare is None:
             return None

@@ -9,6 +9,8 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     plan = commands.add_parser("plan")
     _paths(plan, "metadata-archive", "sources", "output")
+    devplan = commands.add_parser("plan-development")
+    _paths(devplan, "metadata-archive", "replay-sources", "trace-sources", "output")
     prepare = commands.add_parser("prepare")
     _paths(prepare, "metadata-archive", "camera-root", "sources", "plan", "output")
     capture = commands.add_parser("capture-candidate")
@@ -49,6 +51,10 @@ def main(argv=None):
         from hybrid_drive.experiments.vru_clip_data import plan_clip_corpus
 
         result = plan_clip_corpus(args.metadata_archive, args.sources, args.output)
+    elif args.command == "plan-development":
+        from hybrid_drive.experiments.vru_clip_development_data import development_plan
+
+        result = development_plan(args.metadata_archive, args.replay_sources, args.trace_sources, args.output)
     elif args.command == "prepare":
         from hybrid_drive.experiments.vru_clip_data import prepare_clip_corpus
 
