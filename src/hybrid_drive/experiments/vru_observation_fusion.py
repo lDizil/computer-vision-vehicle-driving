@@ -1,13 +1,20 @@
 """Fuse projected detections from one camera snapshot, before association."""
 
 from collections.abc import Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from math import dist
 
 from hybrid_drive.experiments.object_vru_geometry import GroundObject
 
 
 MIN_CROSS_DETECTOR_DISTANCE_M = 1.
+
+
+@dataclass(frozen=True)
+class ObservationProfiles:
+    ssdlite: tuple[GroundObject, ...]
+    faster_rcnn: tuple[GroundObject, ...]
+    combined: tuple[GroundObject, ...]
 
 
 def fuse_vru_observations(
@@ -19,12 +26,19 @@ def fuse_vru_observations(
     not resolve collisions: scores from the two detectors are not calibrated
     to each other. A returned ID is still local to a snapshot, not a track ID.
     """
+    return profile_vru_observations(ssdlite, faster_rcnn).combined
+
+
+def profile_vru_observations(
+    ssdlite: Iterable[GroundObject], faster_rcnn: Iterable[GroundObject],
+) -> ObservationProfiles:
+    """Keep native alternatives addressable by the same IDs as the fused centers."""
     primary = _namespaced(ssdlite, "ssd")
     secondary = _namespaced(faster_rcnn, "rcnn")
     additions = tuple(candidate for candidate in secondary if all(
         dist(candidate.xy, center.xy) >= MIN_CROSS_DETECTOR_DISTANCE_M for center in primary
     ))
-    return primary + additions
+    return ObservationProfiles(primary, secondary, primary + additions)
 
 
 def _namespaced(objects, source):

@@ -14,6 +14,7 @@ from hybrid_drive.experiments.bounded_io import canonical_json
 
 
 SOURCE = Path("scripts/vru-fusion-holdout-sources.json")
+CONTROL_SOURCE = Path("scripts/vru-chain-control-sources.json")
 PREFIX = "openscene-v1.1/sensor_blobs/mini"
 POSE_ROTATION = [[0, 0, 1], [-1, 0, 0], [0, -1, 0]]
 INTRINSIC = [[700, 0, 960], [0, 700, 540], [0, 0, 1]]
@@ -50,12 +51,14 @@ def _prepare(root, *, duplicate=False):
     tracks = [{"centers_xy_m": [[8., 1.], [8.5, 1.], [9., 1.]]}]
     selected = [(1, tracks, [.5, 1.]), (8, [], [.5, 1.]), (14, [], [.5, 1.])]
     output = root / "dataset"
-    with (patch.object(data, "_RECORDINGS", {spec["recording"]}),
+    digest = sha256(canonical_json(source)).hexdigest()
+    with (patch.multiple(data, _RECORDINGS={spec["recording"]}, SOURCE_SHA256=digest),
           patch.object(data, "_load_source", return_value=source),
           patch.object(data, "_read_recordings", return_value=[(spec, frames)]),
           patch.object(data, "_select_samples", return_value=(selected, {})),
           patch.object(data, "sys", SimpleNamespace(platform="linux"))):
-        return output, data.prepare_fusion_holdout(root / "unused.tgz", root, SOURCE, output), spec["recording"]
+        result = data.prepare_fusion_holdout(root / "unused.tgz", root, SOURCE, output)
+    return output, result, spec["recording"], digest
 
 
 class FusionHoldoutDataTest(TestCase):
@@ -66,6 +69,50 @@ class FusionHoldoutDataTest(TestCase):
         self.assertEqual(len(source["logs"]), 6)
         group = lambda recording: (recording[:10], recording.rsplit("_", 1)[-1])
         self.assertFalse({group(x["recording"]) for x in source["logs"]} & {group(x) for x in source["previous_recordings"]})
+
+    def test_chain_control_uses_neither_temporal_nor_fusion_holdout_day_vehicle(self):
+        baseline = data._load_source(SOURCE)
+        control = data._load_source(CONTROL_SOURCE)
+        self.assertEqual(sha256(canonical_json(control)).hexdigest(), data.CHAIN_CONTROL_SOURCE_SHA256)
+        self.assertEqual(set(control["camera_archives"]), {"11", "16"})
+        self.assertEqual(len(control["logs"]), 4)
+        expected_previous = set(baseline["previous_recordings"]) | {row["recording"] for row in baseline["logs"]}
+        self.assertEqual(set(control["previous_recordings"]), expected_previous)
+        group = lambda recording: (recording[:10], recording.rsplit("_", 1)[-1])
+        self.assertFalse({group(row["recording"]) for row in control["logs"]} & {group(r) for r in expected_previous})
+
+    def test_chain_control_rejects_mutated_source_even_with_unchanged_recordings(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "mutated.json"
+            source = data._load_source(CONTROL_SOURCE)
+            source["camera_archives"]["11"]["size_bytes"] += 1
+            path.write_bytes(canonical_json(source))
+            with self.assertRaisesRegex(PreparationError, "checked-in digest"):
+                data._load_source(path)
+
+    def test_chain_control_index_and_labels_bind_to_the_control_profile(self):
+        source = data._load_source(CONTROL_SOURCE)
+        wanted = {shard: {} for shard in source["camera_archives"]}
+        logs = [(spec, [_frame(10 * i + j, spec["log_name"]) for j in range(6)])
+                for i, spec in enumerate(source["logs"])]
+        with (patch.object(data, "_read_recordings", return_value=logs),
+              patch.object(data, "_select_samples", return_value=([(2, [], [.5, 1.])], {}))):
+            index, rows, _ = data._collect_observations(Path("unused"), source, wanted)
+        for frames in wanted.values():
+            for member, (_, view, _) in frames.items():
+                view["sha256"] = sha256(member.encode()).hexdigest()
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            index_path, labels_path = root / "index.json", root / "labels.json"
+            raw = canonical_json(index)
+            index_path.write_bytes(raw)
+            labels = {"schema": data.TARGET_SCHEMA, "input_sha256": sha256(raw).hexdigest(), "rows": rows}
+            labels_path.write_bytes(canonical_json(labels))
+            self.assertEqual(data.load_fusion_inputs(root), index)
+            self.assertEqual(data.load_fusion_labels(root, labels_path), labels)
+            index_path.write_bytes(canonical_json({**index, "source_sha256": data.SOURCE_SHA256}))
+            with self.assertRaisesRegex(ValueError, "Unexpected Fusion VRU recording"):
+                data.load_fusion_inputs(root)
 
     def test_source_guard_rejects_same_day_vehicle_even_when_stamps_and_pin_differ(self):
         source = data._load_source(SOURCE)
@@ -93,12 +140,12 @@ class FusionHoldoutDataTest(TestCase):
     def test_prepare_retains_windows_with_missing_history_and_seals_all_labels(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            output, meta, recording = _prepare(root)
+            output, meta, recording, digest = _prepare(root)
             index_only = root / "index-only"
             index_only.mkdir()
             raw = (output / "inputs/index.json").read_bytes()
             (index_only / "index.json").write_bytes(raw)
-            with patch.object(data, "_RECORDINGS", {recording}):
+            with patch.multiple(data, _RECORDINGS={recording}, SOURCE_SHA256=digest):
                 index = data.load_fusion_inputs(index_only)
                 labels = data.load_fusion_labels(index_only, output / "labels/labels.json")
             self.assertEqual([a["older_token"] for a in index["anchors"]], [None, None, f"{12:016x}"])
@@ -117,12 +164,12 @@ class FusionHoldoutDataTest(TestCase):
     def test_load_rejects_wrong_cadence_and_stale_or_out_of_grid_labels(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            output, _, recording = _prepare(root)
+            output, _, recording, digest = _prepare(root)
             inputs, labels_path = output / "inputs", output / "labels/labels.json"
             index_path = inputs / "index.json"
             original = index_path.read_bytes()
             labels = json.loads(labels_path.read_bytes())
-            with patch.object(data, "_RECORDINGS", {recording}):
+            with patch.multiple(data, _RECORDINGS={recording}, SOURCE_SHA256=digest):
                 index = json.loads(original)
                 old = index["anchors"][-1]["older_token"]
                 index["frames"][old]["ref_time_us"] -= 100_001
@@ -151,7 +198,7 @@ class FusionHoldoutDataTest(TestCase):
             spec, frames, source = _fixture(root)
             frames[2]["token"] = frames[12]["token"]
             archive_key = str(spec["camera_shard"])
-            with (patch.object(data, "_RECORDINGS", {spec["recording"]}),
+            with (patch.multiple(data, _RECORDINGS={spec["recording"]}, SOURCE_SHA256=sha256(canonical_json(source)).hexdigest()),
                   patch.object(data, "_read_recordings", return_value=[(spec, frames)]),
                   patch.object(data, "_select_samples", return_value=([(1, [], [.5, 1.]), (14, [], [.5, 1.])], {}))):
                 with self.assertRaisesRegex(PreparationError, "future observation"):
