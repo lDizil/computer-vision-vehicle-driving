@@ -13,15 +13,17 @@ def main(argv=None):
     _paths(devplan, "metadata-archive", "replay-sources", "trace-sources", "output")
     prepare = commands.add_parser("prepare")
     _paths(prepare, "metadata-archive", "camera-root", "sources", "plan", "output")
+    prepare_dev = commands.add_parser("prepare-development")
+    _paths(prepare_dev, "metadata-archive", "camera-root", "replay-sources", "trace-sources", "plan", "output")
     capture = commands.add_parser("capture-candidate")
     _paths(capture, "inputs", "models", "manifest", "output")
-    capture.add_argument("--split", choices=("development", "control"), required=True)
+    capture.add_argument("--split", choices=("development", "balanced-development", "control"), required=True)
     capture.add_argument("--device", choices=("mps", "cpu"), required=True)
     capture.add_argument("--tiling", choices=("full", "front"), default="full")
     capture.add_argument("--revision", required=True)
     depthpro = commands.add_parser("capture-depthpro")
     _paths(depthpro, "inputs", "candidate", "worker", "compiled", "manifest", "output")
-    depthpro.add_argument("--split", choices=("development", "control"), required=True)
+    depthpro.add_argument("--split", choices=("development", "balanced-development", "control"), required=True)
     depthpro.add_argument("--candidate-sha256", required=True)
     depthpro.add_argument("--revision", required=True)
     depthpro.add_argument("--mask-model", type=Path)
@@ -36,6 +38,11 @@ def main(argv=None):
     score.add_argument("--baseline-sha256", required=True)
     score.add_argument("--depthpro", type=Path)
     score.add_argument("--depthpro-sha256")
+    balanced = commands.add_parser("score-balanced-development")
+    _paths(balanced, "inputs", "candidate", "labels", "output")
+    balanced.add_argument("--candidate-sha256", required=True)
+    balanced.add_argument("--depthpro", type=Path)
+    balanced.add_argument("--depthpro-sha256")
     release = commands.add_parser("freeze-release")
     _paths(release, "inputs", "development-score", "output")
     for field in ("development-sha256", "arm", "revision"):
@@ -59,6 +66,11 @@ def main(argv=None):
         from hybrid_drive.experiments.vru_clip_data import prepare_clip_corpus
 
         result = prepare_clip_corpus(args.metadata_archive, args.camera_root, args.sources, args.plan, args.output)
+    elif args.command == "prepare-development":
+        from hybrid_drive.experiments.vru_clip_development_data import prepare_development_corpus
+
+        result = prepare_development_corpus(args.metadata_archive, args.camera_root, args.replay_sources, args.trace_sources,
+                                            args.plan, args.output)
     elif args.command == "capture-candidate":
         import torch
         from hybrid_drive.experiments.vru_clip_replay import capture_candidate
@@ -93,6 +105,12 @@ def main(argv=None):
 
         result = freeze_release(args.development_score, args.inputs, args.output,
                                 dev_sha256=args.development_sha256, arm=args.arm, revision=args.revision)
+    elif args.command == "score-balanced-development":
+        from hybrid_drive.experiments.vru_clip_balanced import score_balanced_development
+
+        result = score_balanced_development(args.inputs, args.candidate, args.labels, args.output,
+                                            candidate_sha256=args.candidate_sha256,
+                                            depthpro_path=args.depthpro, depthpro_sha256=args.depthpro_sha256)
     else:
         from hybrid_drive.experiments.vru_clip_control import score_control
 

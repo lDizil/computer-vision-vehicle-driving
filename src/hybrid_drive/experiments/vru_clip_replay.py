@@ -133,6 +133,10 @@ def _sensor_index(root, split):
         from hybrid_drive.experiments.vru_fusion_holdout_data import load_fusion_inputs
 
         return load_fusion_inputs(root)
+    if split == "balanced-development":
+        from hybrid_drive.experiments.vru_clip_development_data import load_development_inputs
+
+        return load_development_inputs(root)
     if split == "control":
         from hybrid_drive.experiments.vru_clip_data import load_clip_inputs
 

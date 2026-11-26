@@ -33,8 +33,6 @@ ANCHOR_KEYS = ("sample_token", "previous_token", "older_token", "recording")
 _SOURCE_SCHEMA = "hybrid-drive-vru-clip-sources-v1"
 _RECORDING = re.compile(r"(\d{4}\.\d{2}\.\d{2})\.\d{2}\.\d{2}\.\d{2}_(veh-\d+)")
 _BANDS = ((GRID_X_MIN, 8.0), (8.0, 16.0), (16.0, 27.0))
-_PER_BAND, _MIN_GROUPS, _MAX_PER_GROUP = 40, 6, 24
-_TOTAL = len(_BANDS) * _PER_BAND
 _MIN_GAP_US = 3_000_000
 _SLOT_ALTERNATIVES_US = 500_000
 _MIN_STEP_US, _MAX_STEP_US = 400_000, 600_000
@@ -76,7 +74,17 @@ class _Selection:
         return len(_BANDS) * self.per_band
 
 
-_CONTROL_SELECTION = _Selection(_PER_BAND, _MIN_GROUPS, _MAX_PER_GROUP)
+@dataclass(frozen=True)
+class _CorpusProfile:
+    plan_schema: str
+    input_schema: str
+    label_schema: str
+    source_sha256: str
+    selection: _Selection
+    recordings: frozenset[str] | None = None
+
+
+_CONTROL_PROFILE = _CorpusProfile(PLAN_SCHEMA, INPUT_SCHEMA, LABEL_SCHEMA, SOURCE_SHA256, _Selection(40, 6, 24))
 
 
 def plan_clip_corpus(metadata_archive: Path, source_path: Path, output: Path) -> dict:
@@ -88,11 +96,11 @@ def plan_clip_corpus(metadata_archive: Path, source_path: Path, output: Path) ->
     return _publish_plan(plan, output)
 
 
-def _new_plan_path(path):
+def _new_plan_path(path, *, artifact="plan"):
     output = Path(path)
     check_components(output)
     if output.exists():
-        raise PreparationError("Clip plan output must not already exist")
+        raise PreparationError(f"Clip {artifact} output must not already exist")
     return output
 
 
@@ -110,14 +118,16 @@ def prepare_clip_corpus(metadata_archive: Path, camera_root: Path, source_path: 
                         plan_path: Path, output: Path) -> dict:
     """Recompute the frozen plan, then publish separate images and annotations."""
     _require_linux()
-    output = Path(output)
-    check_components(output)
-    if output.exists():
-        raise PreparationError("Clip corpus output must not already exist")
+    return _prepare_corpus(metadata_archive, camera_root, _load_source(source_path), plan_path, output,
+                           profile=_CONTROL_PROFILE)
+
+
+def _prepare_corpus(metadata_archive, camera_root, source, plan_path, output, *, profile):
+    output = _new_plan_path(output, artifact="corpus")
     output.parent.mkdir(parents=True, exist_ok=True)
-    source = _load_source(source_path)
     plan_bytes = read_bounded(Path(plan_path), _PLAN_LIMIT)
-    plan = _plan(metadata_archive, source)
+    plan = _plan(metadata_archive, source, selection=profile.selection, schema=profile.plan_schema,
+                 source_sha256=profile.source_sha256)
     if plan_bytes != canonical_json(plan) + b"\n":
         raise PreparationError("Frozen clip plan differs from the pinned metadata selection")
     plan_sha = sha256(plan_bytes).hexdigest()
@@ -127,16 +137,16 @@ def prepare_clip_corpus(metadata_archive: Path, camera_root: Path, source_path: 
         stage = Path(tmp) / "corpus"
         inputs = stage / "inputs"
         _extract_cameras(camera_root, plan["camera_archives"], wanted, inputs)
-        index = {"schema": INPUT_SCHEMA, "source_sha256": SOURCE_SHA256, "plan_sha256": plan_sha,
+        index = {"schema": profile.input_schema, "source_sha256": profile.source_sha256, "plan_sha256": plan_sha,
                  "anchors": anchors, "frames": frames}
-        _validate_index(index)
+        _validate_index(index, profile=profile)
         raw = canonical_json(index) + b"\n"
         if len(raw) > INDEX_LIMIT:
             raise PreparationError("Clip inputs exceed their artifact byte budget")
         (inputs / "index.json").write_bytes(raw)
         digest = sha256(raw).hexdigest()
-        labels = {"schema": LABEL_SCHEMA, "input_sha256": digest, "rows": rows}
-        _validate_labels(labels, index, digest)
+        labels = {"schema": profile.label_schema, "input_sha256": digest, "rows": rows}
+        _validate_labels(labels, index, digest, profile=profile)
         truth = canonical_json(labels) + b"\n"
         if len(truth) > LABEL_LIMIT:
             raise PreparationError("Clip labels exceed their artifact byte budget")
@@ -157,9 +167,13 @@ def load_clip_inputs(input_root: Path) -> dict:
 
 
 def load_clip_labels(input_root: Path, labels_path: Path) -> dict:
-    raw, index = _read_index(input_root)
+    return _load_labels(input_root, labels_path, profile=_CONTROL_PROFILE)
+
+
+def _load_labels(input_root, labels_path, *, profile):
+    raw, index = _read_index(input_root, profile=profile)
     labels = decode_json(read_bounded(Path(labels_path), LABEL_LIMIT))
-    _validate_labels(labels, index, sha256(raw).hexdigest())
+    _validate_labels(labels, index, sha256(raw).hexdigest(), profile=profile)
     return labels
 
 
@@ -201,7 +215,7 @@ def _read_recordings(metadata_archive, source, only_logs=None):
         yield spec, _chronological(frames)
 
 
-def _plan(metadata_archive, source, *, selection=_CONTROL_SELECTION, schema=PLAN_SCHEMA, source_sha256=SOURCE_SHA256):
+def _plan(metadata_archive, source, *, selection=_CONTROL_PROFILE.selection, schema=PLAN_SCHEMA, source_sha256=SOURCE_SHA256):
     options = [clip for spec, frames in _read_recordings(metadata_archive, source)
                for clip in _candidates(spec, frames)]
     selected = _select(options, source["camera_archives"], selection=selection)
@@ -263,7 +277,7 @@ def _center(transform, box):
     return (transform[:3, :3] @ box[:3] + transform[:3, 3])[:2].tolist()
 
 
-def _select(candidates, camera_archives, *, selection=_CONTROL_SELECTION):
+def _select(candidates, camera_archives, *, selection=_CONTROL_PROFILE.selection):
     by_shard = defaultdict(list)
     for clip in candidates:
         by_shard[clip.shard].append(clip)
@@ -308,7 +322,7 @@ def _slots(available):
     return slots
 
 
-def _assign(slots, *, selection=_CONTROL_SELECTION):
+def _assign(slots, *, selection=_CONTROL_PROFILE.selection):
     if (sum(min(len(rows), selection.max_per_group) for rows in slots.values()) < selection.total
             or any(sum(b in row for rows in slots.values() for row in rows) < selection.per_band for b in range(len(_BANDS)))):
         return None
@@ -409,25 +423,28 @@ def _label_row(clip, window):
             "primary_id": clip["primary_id"], "frames": observed}
 
 
-def _read_index(root):
+def _read_index(root, *, profile=_CONTROL_PROFILE):
     raw = read_bounded(Path(root) / "index.json", INDEX_LIMIT)
     index = decode_json(raw)
-    _validate_index(index)
+    _validate_index(index, profile=profile)
     return raw, index
 
 
-def _validate_index(index):
+def _validate_index(index, *, profile=_CONTROL_PROFILE):
     require_keys(index, {"schema", "source_sha256", "plan_sha256", "anchors", "frames"}, "Clip sensor index")
     require_hex(index["plan_sha256"], 64, "clip plan checksum")
     anchors, frames = index["anchors"], index["frames"]
-    if (index["schema"] != INPUT_SCHEMA or index["source_sha256"] != SOURCE_SHA256
-            or not isinstance(anchors, list) or len(anchors) != _TOTAL or not isinstance(frames, dict)
-            or len(frames) != 3 * _TOTAL):
+    selection = profile.selection
+    if (index["schema"] != profile.input_schema or index["source_sha256"] != profile.source_sha256
+            or not isinstance(anchors, list) or len(anchors) != selection.total or not isinstance(frames, dict)
+            or len(frames) != 3 * selection.total):
         raise ValueError("Unexpected clip sensor index shape or provenance")
     used, images, counts, previous = set(), {}, Counter(), {}
     for row in anchors:
         require_keys(row, set(ANCHOR_KEYS), "Clip anchor")
         group = _group(row["recording"])
+        if profile.recordings is not None and row["recording"] not in profile.recordings:
+            raise ValueError("Clip anchor belongs to a recording outside this corpus profile")
         stamps = []
         for key in ("older_token", "previous_token", "sample_token"):
             token = row[key]
@@ -442,14 +459,14 @@ def _validate_index(index):
         previous[group] = stamps[-1]
         counts[group] += 1
     if (used != frames.keys() or len(images) != len(CAMERAS) * len(frames)
-            or len(counts) < _MIN_GROUPS or any(n > _MAX_PER_GROUP for n in counts.values())):
+            or len(counts) < selection.min_groups or any(n > selection.max_per_group for n in counts.values())):
         raise ValueError("Unexpected clip grouping or duplicate sensor inputs")
 
 
-def _validate_labels(labels, index, digest):
+def _validate_labels(labels, index, digest, *, profile=_CONTROL_PROFILE):
     require_keys(labels, {"schema", "input_sha256", "rows"}, "Clip labels")
-    if (labels["schema"] != LABEL_SCHEMA or labels["input_sha256"] != digest
-            or not isinstance(labels["rows"], list) or len(labels["rows"]) != _TOTAL):
+    if (labels["schema"] != profile.label_schema or labels["input_sha256"] != digest
+            or not isinstance(labels["rows"], list) or len(labels["rows"]) != profile.selection.total):
         raise ValueError("Clip labels do not bind the exact frozen index")
     counts = Counter()
     for row, anchor in zip(labels["rows"], index["anchors"], strict=True):
@@ -477,5 +494,5 @@ def _validate_labels(labels, index, digest):
             raise ValueError("Clip primary annotation is not stable or in the current ROI")
         x = primary[-1][1][0]
         counts[next(i for i, (lo, hi) in enumerate(_BANDS) if lo <= x < hi)] += 1
-    if counts != {i: _PER_BAND for i in range(len(_BANDS))}:
+    if counts != {i: profile.selection.per_band for i in range(len(_BANDS))}:
         raise ValueError("Clip labels no longer have the fixed distance balance")
