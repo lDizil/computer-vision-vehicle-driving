@@ -80,6 +80,7 @@ def freeze_release(dev_path, control_root, output, *, dev_sha256, arm, revision)
 
         require_hex(development.get("depthpro_sha256"), 64, "development depth artifact SHA256")
         depthpro_profile = validate_depthpro_profile(development.get("depthpro_profile"))
+    require_hex(development.get("candidate_revision"), 40, "development detector capture revision")
     control_index(control_root)
     control_sha = index_sha(control_root)
     if control_sha == development["input_sha256"]:
@@ -89,6 +90,7 @@ def freeze_release(dev_path, control_root, output, *, dev_sha256, arm, revision)
         "input_sha256": control_sha, "development_score_sha256": dev_sha256,
         "development_clips": count, "development_passed": passed,
         "candidate_profile": development["candidate_profile"],
+        "candidate_revision": development["candidate_revision"],
         "depthpro_profile": depthpro_profile,
         "threshold": {"clips": CONTROL_CLIPS, "passed": REQUIRED_PASS},
     })
@@ -106,6 +108,7 @@ def score_control(root, baseline_path, candidate_path, release_path, labels_path
     if (release["schema"] != CONTROL_RELEASE or release["arm"] not in ARMS
             or release["input_sha256"] != digest or release["plan_sha256"] != PLAN_SHA256
             or release["candidate_profile"] != candidate["profile"]
+            or release.get("candidate_revision") != candidate["revision"]
             or release["threshold"] != {"clips": CONTROL_CLIPS, "passed": REQUIRED_PASS}
             or baseline["schema"] != BASELINE_CAPTURE or baseline["input_sha256"] != digest
             or baseline["plan_sha256"] != PLAN_SHA256 or baseline["labels_read"] is not False):

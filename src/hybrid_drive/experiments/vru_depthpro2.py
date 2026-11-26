@@ -67,9 +67,10 @@ def checkpoint_profile(worker, compiled, manifest):
 
 
 def validate_depthpro_profile(profile):
-    require_keys(profile, PROFILE_KEYS, "Depth Pro 2 execution profile")
-    for name, digest in profile.items():
-        require_hex(digest, 64, name)
+    require_keys(profile, PROFILE_KEYS | {"revision"}, "Depth Pro 2 execution profile")
+    require_hex(profile["revision"], 40, "Depth Pro 2 capture revision")
+    for name in PROFILE_KEYS:
+        require_hex(profile[name], 64, name)
     if profile["checkpoint_manifest_sha256"] not in PINNED_MANIFESTS_SHA256:
         raise ValueError("Expected a pinned Depth Pro 2 checkpoint manifest")
     return profile

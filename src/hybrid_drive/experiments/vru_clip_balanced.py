@@ -38,6 +38,7 @@ def score_balanced_development(root, candidate_path, labels_path, output, *,
     output.mkdir(parents=True)
     write_json(output/"score.json", {"schema": DEVELOPMENT_SCORE, "input_sha256": digest,
                "candidate_sha256": candidate_sha256, "candidate_profile": candidate["profile"],
+               "candidate_revision": candidate["revision"],
                "depthpro_sha256": depthpro_sha256, "depthpro_profile": depthpro_profile, "purpose": "balanced_development_only",
                "scores": scores})
     return {name: score["counts"] for name, score in scores.items()}

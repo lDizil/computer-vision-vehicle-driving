@@ -226,7 +226,7 @@ def score_development(root, candidate_path, baseline_path, labels_path, history_
     scores = {name: summarize_vru_clips(rows, truth, expected_count=len(truth), required_pass=ceil(2*len(truth)/3))
               for name, rows in predictions.items()}
     result = {"schema": DEVELOPMENT_SCORE, "input_sha256": digest, "candidate_sha256": candidate_sha256,
-              "candidate_profile": candidate["profile"],
+              "candidate_profile": candidate["profile"], "candidate_revision": candidate["revision"],
               "baseline_sha256": baseline_sha256, "depthpro_sha256": depthpro_sha256, "depthpro_profile": depthpro_profile,
               "purpose": "development_only_not_the_fixed_120_clip_control",
               "captured": len(captures), "eligible_with_primary": len(truth), "scores": scores}
@@ -267,7 +267,8 @@ def _bound_depthpro(path, seal, camera_seal, digest, split, count):
         return capture["observations"], None
     from hybrid_drive.experiments.vru_depthpro2 import PROFILE_KEYS, validate_depthpro_profile
 
-    return capture["observations"], validate_depthpro_profile({key: capture.get(key) for key in PROFILE_KEYS})
+    profile = {key: capture.get(key) for key in PROFILE_KEYS}
+    return capture["observations"], validate_depthpro_profile({**profile, "revision": capture["revision"]})
 
 
 def _validate_depthpro_cameras(fresh, apple):

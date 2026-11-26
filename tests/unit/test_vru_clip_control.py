@@ -4,7 +4,8 @@ import json
 import pytest
 
 from hybrid_drive.experiments import vru_clip_control
-from hybrid_drive.experiments.vru_clip_replay import CAPTURE_SCHEMA, DEVELOPMENT_SCORE
+from hybrid_drive.experiments.vru_chain_capture import save_sealed
+from hybrid_drive.experiments.vru_clip_replay import CAPTURE_SCHEMA, DEPTHPRO_SCHEMA, DEVELOPMENT_SCORE, FRAMES
 from hybrid_drive.experiments.vru_depthpro2 import PINNED_MANIFESTS_SHA256
 
 
@@ -28,7 +29,7 @@ def test_release_binds_the_development_variant_and_control_plan(monkeypatch, tmp
     dev = tmp_path/"development.json"
     profile = {"tiling": "front", "runtime": {"torch": "2.8.0"}}
     content = json.dumps({"schema": DEVELOPMENT_SCORE, "candidate_profile": profile,
-                          "input_sha256": "d"*64,
+                          "input_sha256": "d"*64, "candidate_revision": "b"*40,
                           "scores": {"dfine_calibrated": {"counts": {"clips": 36, "passed": 24}}}}).encode()
     dev.write_bytes(content)
     monkeypatch.setattr(vru_clip_control, "control_index", lambda root: {})
@@ -40,6 +41,7 @@ def test_release_binds_the_development_variant_and_control_plan(monkeypatch, tmp
     assert meta["release_sha256"] == sha256(data).hexdigest()
     profile_lock = json.loads(data)
     assert profile_lock["candidate_profile"] == profile
+    assert profile_lock["candidate_revision"] == "b"*40
     assert profile_lock["plan_sha256"] == vru_clip_control.PLAN_SHA256
     assert profile_lock["threshold"] == {"clips": 120, "passed": 80}
 
@@ -57,10 +59,10 @@ def test_cannot_freeze_depth_release_from_old_score_without_bundle_identity(tmp_
 
 def test_freeze_depth_profile_from_scored_development(monkeypatch, tmp_path):
     execution = {"worker_sha256": "a"*64, "checkpoint_manifest_sha256": sorted(PINNED_MANIFESTS_SHA256)[0],
-                 "compiled_bundle_sha256": "b"*64}
+                 "compiled_bundle_sha256": "b"*64, "revision": "b"*40}
     dev = tmp_path / "development.json"
     data = json.dumps({"schema": DEVELOPMENT_SCORE, "input_sha256": "c"*64, "candidate_profile": {},
-                       "depthpro_sha256": "d"*64, "depthpro_profile": execution,
+                       "candidate_revision": "c"*40, "depthpro_sha256": "d"*64, "depthpro_profile": execution,
                        "scores": {"dfine_depthpro": {"counts": {"clips": 60, "passed": 40}}}}).encode()
     dev.write_bytes(data)
     monkeypatch.setattr(vru_clip_control, "control_index", lambda root: {})
@@ -71,26 +73,34 @@ def test_freeze_depth_profile_from_scored_development(monkeypatch, tmp_path):
     assert json.loads((out / "release.json").read_bytes())["depthpro_profile"] == execution
 
 
-def test_control_cannot_switch_depth_model_before_reading_labels(monkeypatch, tmp_path):
+@pytest.mark.parametrize("field", ["checkpoint_manifest_sha256", "compiled_bundle_sha256", "worker_sha256",
+                                  "revision", "candidate_revision"])
+def test_control_cannot_switch_pipeline_before_reading_labels(monkeypatch, tmp_path, field):
     digest = "e"*64
     plan = vru_clip_control.PLAN_SHA256
     manifest_a, manifest_b = sorted(PINNED_MANIFESTS_SHA256)
-    frozen = {"worker_sha256": "a"*64, "checkpoint_manifest_sha256": manifest_a, "compiled_bundle_sha256": "b"*64}
-    substituted = {**frozen, "checkpoint_manifest_sha256": manifest_b, "compiled_bundle_sha256": "f"*64}
+    frozen = {"worker_sha256": "a"*64, "checkpoint_manifest_sha256": manifest_a,
+              "compiled_bundle_sha256": "b"*64, "revision": "a"*40}
+    changed = manifest_b if field == "checkpoint_manifest_sha256" else "f"*(40 if field == "revision" else 64)
+    substituted = {**frozen, field: changed} if field != "candidate_revision" else frozen
     release = {"schema": vru_clip_control.CONTROL_RELEASE, "input_sha256": digest, "plan_sha256": plan,
-               "arm": "dfine_depthpro", "candidate_profile": {}, "depthpro_profile": frozen,
+               "arm": "dfine_depthpro", "candidate_profile": {}, "candidate_revision": "a"*40, "depthpro_profile": frozen,
                "threshold": {"clips": 120, "passed": 80}}
     baseline = {"schema": vru_clip_control.BASELINE_CAPTURE, "input_sha256": digest, "plan_sha256": plan,
                 "labels_read": False, "revision": "a"*40}
     candidate = {"schema": CAPTURE_SCHEMA, "input_sha256": digest, "split": "control", "profile": {},
-                 "labels_read": False, "revision": "a"*40}
-    records = {"release": release, "baseline": baseline, "candidate": candidate}
-    monkeypatch.setattr(vru_clip_control, "sealed_read", lambda path, seal: records[path])
+                 "labels_read": False, "revision": "f"*40 if field == "candidate_revision" else "a"*40}
+    files = {name: (tmp_path / name / "artifact.json", save_sealed(tmp_path / name, "artifact.json", record))
+             for name, record in (("release", release), ("baseline", baseline), ("candidate", candidate))}
+    depth = {"schema": DEPTHPRO_SCHEMA, "candidate_sha256": files["candidate"][1], "input_sha256": digest,
+             "split": "control", "labels_read": False, "causal_order": list(FRAMES), "observations": [], **substituted}
+    depth_sha = save_sealed(tmp_path / "depth", "artifact.json", depth)
     monkeypatch.setattr(vru_clip_control, "control_index", lambda root: {})
     monkeypatch.setattr(vru_clip_control, "index_sha", lambda root: digest)
-    monkeypatch.setattr(vru_clip_control, "_bound_depthpro", lambda *args: ((), substituted))
     monkeypatch.setattr(vru_clip_control, "load_clip_labels", lambda *args: pytest.fail("Control labels must remain closed"))
-    with pytest.raises(ValueError, match="match the frozen development profile"):
-        vru_clip_control.score_control(tmp_path, "baseline", "candidate", "release", "untouched", tmp_path / "out",
-                                       baseline_sha256="1"*64, candidate_sha256="2"*64, release_sha256="3"*64,
-                                       depthpro_path="substituted", depthpro_sha256="4"*64)
+    error = "locked to the fixed control" if field == "candidate_revision" else "match the frozen development profile"
+    with pytest.raises(ValueError, match=error):
+        vru_clip_control.score_control(tmp_path, files["baseline"][0], files["candidate"][0], files["release"][0],
+                                       tmp_path / "untouched", tmp_path / "out", baseline_sha256=files["baseline"][1],
+                                       candidate_sha256=files["candidate"][1], release_sha256=files["release"][1],
+                                       depthpro_path=tmp_path / "depth" / "artifact.json", depthpro_sha256=depth_sha)
