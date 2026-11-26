@@ -14,6 +14,7 @@ from hybrid_drive.adapters.real_camera import _rectify_native_openscene_rgb
 from hybrid_drive.experiments.bounded_io import decode_json, read_bounded
 from hybrid_drive.experiments.vru_chain_capture import index_sha
 from hybrid_drive.experiments.vru_fusion_holdout_data import load_fusion_inputs
+from hybrid_drive.experiments.vru_plane_probe import SCORE as PLANE_SCORE
 from hybrid_drive.experiments.vru_projection_audit import SCORE_SCHEMA
 
 
@@ -41,11 +42,18 @@ W, H = 768, 432
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for key in ("control-score", "control-inputs", "replay-score", "replay-inputs", "output"):
+    for key in ("control-score", "control-inputs", "replay-score", "replay-inputs", "plane-score", "output"):
         parser.add_argument("--" + key, type=Path, required=True)
+    parser.add_argument("--tracking-score", type=Path)
     args = parser.parse_args(argv)
     control = _load(args.control_score, args.control_inputs)
     replay = _load(args.replay_score, args.replay_inputs)
+    plane = decode_json(read_bounded(args.plane_score, 16 * 1024**2))
+    if plane["schema"] != PLANE_SCORE or plane["input_sha256"] != control[0]["input_sha256"]:
+        raise ValueError("Plane experiment must use the same separate control")
+    tracking = None if args.tracking_score is None else decode_json(read_bounded(args.tracking_score, 64 * 1024))
+    if tracking is not None and any(tracking[key] != plane[key] for key in ("fit_sha256", "labels_sha256")):
+        raise ValueError("Tracking replay must use the same plane fit and labels")
     control_moving = control[0]["summary"]["moving"]
     missed = control_moving["unmatched_with_no_near_center"]
     with_box = control_moving["no_near_with_camera_witness"]["0.3"]
@@ -58,6 +66,7 @@ def main(argv=None):
 имели 2D-бокс, который можно отнести к той же цели по контуру из разметки.</p></header>
 {_section("01", "Отдельный контроль", control)}
 {_section("02", "Повтор #54", replay)}
+{_plane(plane, tracking)}
 <footer>Зелёный контур — проекция 3D-разметки, а не ручная 2D-разметка. Отсутствие бокса не доказывает,
 что объект был виден. Ниже внутреннего порога и NMS TorchVision трасса не видит боксы.
 Поездки отобраны для диагностики; это не оценка частоты ошибок в реальном движении.</footer></main></body></html>""")
@@ -91,6 +100,35 @@ def _section(number, title, bundle):
 <h3>Те же кадры с наложением контуров</h3><div class="cards">
 {''.join(_example(case, index, root) for case in _select(summary['cases']))}
 </div></section>"""
+
+
+def _plane(result, tracking):
+    score = result["summary"]
+    near = score["plane_gate"]["matched_under_16m"]
+    result_label = {"signal": "Порог пройден", "gain_not_established": "Улучшение не доказано",
+                    "insufficient_common_support": "Недостаточно общих совпадений"}[score["plane_gate"]["status"]]
+    matched = tuple(score["arms"][side]["matched_tracks"] for side in ("reference", "candidate"))
+    moving = tuple(score["slices"]["moving"]["arms"][side]["matched_tracks"] for side in ("reference", "candidate"))
+    overlap = score["slices"]["all"]
+    detail = "" if tracking is None else _track_detail(tracking)
+    return f"""<section><div class="tag">03 · проверка поправки</div>
+<h2>Одна плоскость на весь набор</h2><p>Только по старым поездкам получили
+<b>z = {result['fitted_plane_z_m']:+.3f} м</b>. В контроле оставили те же принятые 2D-боксы,
+изменили только высоту пересечения луча и повторили объединение.</p>
+<p>Совпадения: <b>{matched[0]} → {matched[1]}</b> всего, <b>{moving[0]} → {moving[1]}</b> у движущихся целей,
+<b>{near['reference']} → {near['candidate']}</b> ближе 16 м. {escape(result_label)}.</p>
+<p>Новых совпадений: {overlap['only_candidate']}; прежних потеряно: {overlap['only_reference']}.
+Рост покрытия не означает, что сохранилась каждая цель.</p>{detail}</section>"""
+
+
+def _track_detail(tracking):
+    a, b = (tracking["tracking"][side]["confirmed_moving"] for side in ("baseline", "plane"))
+    common = tracking["paired_moving_at_1s"]
+    before, after = (common["arms"][side]["displacement_mean_m"] for side in ("baseline", "plane"))
+    return f"""<h3>Что изменилось у трекера</h3>
+<p>Прежний трекер выдал подтверждённую оценку скорости в {a} → {b} случаях.
+На {common['pairs']} общих движущихся целях средняя ошибка смещения через секунду
+изменилась с {before:.2f} до {after:.2f} м. Поддержка выросла, но убедительного выигрыша в точности пока нет.</p>"""
 
 
 def _select(cases):
