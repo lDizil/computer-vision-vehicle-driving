@@ -1,4 +1,4 @@
-"""Render two sealed VRU chain scores as one offline report with camera examples."""
+"""Render two scored VRU chain replays as one offline report with camera examples."""
 
 import argparse
 from base64 import b64encode
@@ -37,6 +37,15 @@ CAUSES = {
     "confirmation_below_motion_floor": "Слишком малое смещение",
     "confirmation_inconsistent_motion": "Скорости на двух интервалах не согласованы",
 }
+PHASES = {"previous": "t−0,5 с", "older": "t−1 с", "origin": "детекция-источник", "confirmation": "подтверждение"}
+STATES = {"missing_frame": "кадр недоступен", "missing_annotations": "нет разметки",
+          "unlabeled_target": "цель не размечена на этом кадре", "unverified_link": "связь не сверяется с разметкой",
+          "other_target": "связь с другой размеченной целью", "link_not_attempted": "связь не искали",
+          "ambiguous_history": "несколько возможных связей", "nonmutual_history": "связь не взаимна",
+          "no_reliable_history": "нет надёжной связи", "no_initial_link": "нет первой связи",
+          "no_older_link": "нет второй связи", "no_older_observation": "нет третьего кадра",
+          "no_common_camera": "нет общей камеры для трёх кадров", "inconsistent_appearance": "не совпадает внешность",
+          "inconsistent_cameras": "камеры дают разные скорости"}
 GROUPS = {"moving": "Движущийся объект", "quiet": "Стоящий объект", "intermediate": "Малое движение"}
 PALETTE = ("#a3a0ff", "#8fa8bc", "#46dfb5")
 
@@ -100,6 +109,7 @@ def _section(number, title, help_text, bundle):
             "Скорость у стоящих", "Ошибка смещения, м", "Ошибка центра, м")
     gate = "".join(_gate(summary["comparisons"][name], name) for name in RESCUES)
     causes = _causes(summary["arms"][EARLY]["moving"]["causes"])
+    dropout = _coverage_note(summary["cases"])
     cards = "".join(_example(case, index, root) for case in _select_cases(summary["cases"]))
     return f"""<section>
 <div class="eyebrow">{number} / {n['windows']} окон · {n['annotated_tracks']} размеченных целей · {n['moving_tracks']} движущихся</div>
@@ -107,7 +117,7 @@ def _section(number, title, help_text, bundle):
 {_table(cols, "".join(lines))}
 <p class="aside">Ошибки — примерно через 1 с, на целях, найденных соответствующим вариантом. У двух восстановлений состав совпадает с ранним объединением.
 «Сверены 3 кадра» — совпадение с одной размеченной целью во всех трёх кадрах по консервативному сопоставлению, а не доказанный ID детекции.</p>
-<div class="grid">{gate}</div><h3>Первый барьер для движущихся · раннее объединение</h3>{causes}
+<div class="grid">{gate}</div><h3>Первый барьер для движущихся · раннее объединение</h3>{dropout}{causes}
 <h3>Примеры на реальных кадрах</h3><p class="aside">Подобранные примеры, не частота событий. Схемы справа — проекции на дорогу, не рамки на фото.</p>
 <div class="examples">{cards or '<p>Нет объектов для показа.</p>'}</div>
 <p class="aside hash">Прогноз SHA256: {escape(result['prediction_sha256'])}</p></section>"""
@@ -136,9 +146,27 @@ def _row(cells, *, cls=""):
 def _causes(causes):
     values = sorted(causes.items(), key=lambda item: (-item[1], item[0]))
     peak = max((count for _, count in values), default=1)
-    rows = "".join(f"""<div class="bar"><span>{escape(CAUSES.get(key, key))}</span>
+    rows = "".join(f"""<div class="bar"><span>{escape(_cause(key))}</span>
 <meter min="0" max="{peak}" value="{count}">{count}</meter><b>{count}</b></div>""" for key, count in values)
     return f'<div class="bars">{rows}</div>'
+
+
+def _cause(key):
+    if key in CAUSES:
+        return CAUSES[key]
+    phase, _, state = key.partition("_")
+    return f"{PHASES[phase]}: {STATES[state]}" if phase in PHASES and state in STATES else key
+
+
+def _coverage_note(cases):
+    moving = [case for case in cases if case["category"] == "moving"]
+    unmatched = [case for case in moving if not case["arms"][EARLY]["matched"]]
+    neither_near = sum(
+        all(case["arms"][name]["cause"] == "current_missing_center" for name in ("ssdlite", "faster_rcnn"))
+        for case in unmatched
+    )
+    return (f"<p>{len(unmatched)} из {len(moving)} движущихся целей не имеют однозначного текущего совпадения. "
+            f"У {neither_near} из них ни один детектор не дал проецированного центра в радиусе 2 м.</p>")
 
 
 def _select_cases(all_cases):
@@ -148,7 +176,8 @@ def _select_cases(all_cases):
         case["arms"]["bridge_rescue"]["displacement_error_m"] - case["arms"][EARLY]["displacement_error_m"],
     ))
     losses = [case for case in all_cases if case["category"] == "moving" and case["arms"][EARLY]["matched"]
-              and case["arms"][EARLY]["cause"] in ("older_missing_center", "older_ambiguous_or_nonmutual_center")
+              and case["arms"][EARLY]["cause"] in ("previous_missing_center", "previous_ambiguous_or_nonmutual_center",
+                                                  "older_missing_center", "older_ambiguous_or_nonmutual_center")
               and not case["arms"]["bridge_rescue"].get("rescue")]
     return (changed[:2] + losses[:1]) or [case for case in all_cases if case["arms"][EARLY]["matched"]][:1]
 
@@ -162,7 +191,7 @@ def _example(case, index, root):
                      for slot, time in (("older_token", "t−1"), ("previous_token", "t−0,5"), ("sample_token", "t")))
     ep = escape(case["sample_token"][:8])
     return f"""<article class="panel sp"><div><div class="eyebrow">{GROUPS[case['category']]} · {ep}</div>
-<h3>{mode}</h3><p>{escape(CAUSES.get(a['cause'], a['cause']))} → {escape(CAUSES.get(b['cause'], b['cause']))}.</p>
+<h3>{mode}</h3><p>{escape(_cause(a['cause']))} → {escape(_cause(b['cause']))}.</p>
 <div class="frames">{frames}</div>
 <p class="aside">Камера {escape(camera)} · ошибка смещения: {_number(a['displacement_error_m'])} → {_number(b['displacement_error_m'])} м.</p></div>
 {_plot(case['truth'], a, b)}</article>"""
