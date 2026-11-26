@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from hybrid_drive.experiments.vru_metric_detector import DepthSample, depth_sample, metric_hit
+from hybrid_drive.experiments.object_vru_detector import DetectedBox, _Tile
+from hybrid_drive.experiments.vru_metric_detector import DepthSample, depth_sample, metric_hit, place_tile_box
 from hybrid_drive.experiments.vru_clip_replay import _capture_window, _validate_comparable_cameras
 from hybrid_drive.geometry.camera import CameraCalibration
 from hybrid_drive.geometry.rigid import invert_pose
@@ -45,3 +46,11 @@ def test_capture_produces_the_groups_required_by_the_comparability_guard():
                             lambda *args, **kwargs: shot)
     previous = {"observations": {when: {"sha256": shot.content_sha256} for when in ("older", "previous", "current")}}
     _validate_comparable_cameras(fresh, previous)
+
+
+def test_overlap_tile_remaps_local_coordinates_and_rejects_a_cut_box():
+    tile = _Tile(2, 1, (288, 86, 768, 410))
+    label = DetectedBox("person", .8, (15, 8, 70, 152), 0)
+    result = place_tile_box(tile, label)
+    assert result.tile == 1 and result.xyxy == (303, 94, 358, 238)
+    assert place_tile_box(tile, DetectedBox("person", .8, (15, 1, 70, 160), 0)) is None

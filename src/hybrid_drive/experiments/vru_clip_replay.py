@@ -26,14 +26,14 @@ FITTED_PLANE_Z_M = -.190
 MODEL_ARMS = ("dfine_plane", "dfine_metric")
 
 
-def capture_candidate(input_root, models, manifest, output, *, split, revision, device):
+def capture_candidate(input_root, models, manifest, output, *, split, revision, device, tiling="full"):
     from hybrid_drive.experiments.box_motion_inputs import load_motion_snapshot
     from hybrid_drive.experiments.vru_metric_detector import MetricVruDetector
 
     ensure_new_output(output)
     require_hex(revision, 40, "candidate revision")
     source = _sensor_index(input_root, split)
-    detector = MetricVruDetector(models, manifest, device=device)
+    detector = MetricVruDetector(models, manifest, device=device, tiling=tiling)
     windows = []
     for anchor in source["anchors"]:
         windows.append(_capture_window(anchor, source, input_root, detector, load_motion_snapshot))
@@ -185,6 +185,7 @@ def score_development(root, candidate_path, baseline_path, labels_path, history_
     scores = {name: summarize_vru_clips(rows, truth, expected_count=len(truth), required_pass=ceil(2*len(truth)/3))
               for name, rows in predictions.items()}
     result = {"schema": DEVELOPMENT_SCORE, "input_sha256": digest, "candidate_sha256": candidate_sha256,
+              "candidate_profile": candidate["profile"],
               "baseline_sha256": baseline_sha256, "depthpro_sha256": depthpro_sha256,
               "purpose": "development_only_not_the_fixed_120_clip_control",
               "captured": len(captures), "eligible_with_primary": len(truth), "scores": scores}

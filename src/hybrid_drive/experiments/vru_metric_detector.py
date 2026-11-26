@@ -1,6 +1,6 @@
 """Offline D-FINE and metric-depth adapter for the existing projected-object tracker."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha1, sha256
 from importlib.metadata import version
 from math import ceil, floor, isfinite
@@ -61,7 +61,7 @@ def model_profiles(root, manifest_path):
 class MetricVruDetector:
     """Same camera images and 2D boxes for the old-plane and depth treatments."""
 
-    def __init__(self, root, manifest, *, device, batch_size=2):
+    def __init__(self, root, manifest, *, device, batch_size=2, tiling="full"):
         import torch
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation, AutoModelForObjectDetection
 
@@ -69,12 +69,15 @@ class MetricVruDetector:
             raise ValueError("Expected an available local CPU or MPS backend")
         if type(batch_size) is not int or not 1 <= batch_size <= 3:
             raise ValueError("Expected a small bounded camera batch")
+        if tiling not in ("full", "front"):
+            raise ValueError("Expected full views alone or the fixed front overlap tiles")
         installed = {package: version(package) for package in MODEL_VERSIONS}
         if installed != MODEL_VERSIONS:
             raise RuntimeError(f"Expected the pinned model runtime, got {installed}")
         self._torch = torch
         self._device = device
         self._batch = batch_size
+        self._tiling = tiling
         profiles = model_profiles(root, manifest)
         detector_path, depth_path = (Path(root) / name for name in ("detector", "depth"))
         local = {"local_files_only": True, "trust_remote_code": False}
@@ -95,7 +98,7 @@ class MetricVruDetector:
             raise ValueError("Relative-depth or indoor checkpoints cannot supply metric ground points")
         self.provenance = {"models": profiles, "runtime": installed, "device": device,
                            "rectified_wh": list(FRAMES_WH), "batch_size": batch_size, "depth_policy": DEPTH_POLICY,
-                           "box_floor": SCORE_FLOOR}
+                           "box_floor": SCORE_FLOOR, "tiling": tiling}
 
     def __call__(self, snapshot):
         from PIL import Image
@@ -106,9 +109,10 @@ class MetricVruDetector:
         frames = tuple(Image.fromarray(item.rgb) for item in snapshot.views)
         observations = []
         with self._torch.inference_mode():
+            boxes = self._detect_views(frames, snapshot.views)
             for offset in range(0, len(frames), self._batch):
                 current = frames[offset:offset+self._batch]
-                detections = self._boxes(current)
+                detections = boxes[offset:offset+self._batch]
                 keep = [i for i, values in enumerate(detections) if values]
                 depths = dict(zip(keep, self._depth_maps([current[i] for i in keep]), strict=True)) if keep else {}
                 for i, candidates in enumerate(detections):
@@ -120,6 +124,22 @@ class MetricVruDetector:
             hits["metric"].extend(metric)
         return {key: fuse_ground_hits(values) for key, values in hits.items()}, [row for row, _, _ in observations]
 
+    def _detect_views(self, images, views):
+        from hybrid_drive.experiments.object_vru_detector import _Tile, _tiles
+
+        tiles = (_tiles(views) if self._tiling == "front"
+                 else tuple(_Tile(i, 0, (0, 0, *FRAMES_WH)) for i in range(len(images))))
+        collected = [[] for _ in views]
+        for offset in range(0, len(tiles), self._batch):
+            batch = tiles[offset:offset+self._batch]
+            candidates = self._boxes(tuple(images[tile.view_index].crop(tile.crop) for tile in batch))
+            for tile, hits in zip(batch, candidates, strict=True):
+                for hit in hits:
+                    mapped = place_tile_box(tile, hit)
+                    if mapped is not None:
+                        collected[tile.view_index].append(mapped)
+        return collected
+
     def _boxes(self, images):
         from hybrid_drive.experiments.object_vru_detector import DetectedBox
 
@@ -129,14 +149,14 @@ class MetricVruDetector:
         rows = self._det_processor.post_process_object_detection(result, threshold=min(SCORE_FLOOR.values()),
                                                                   target_sizes=target_sizes)
         grouped = []
-        for row in rows:
+        for image, row in zip(images, rows, strict=True):
             boxes = []
             raw = zip(row["labels"].tolist(), row["scores"].tolist(), row["boxes"].tolist(), strict=True)
             for label, score, box in raw:
                 kind = self._classes.get(label)
                 if kind is None or not isfinite(score) or score < SCORE_FLOOR[kind]:
                     continue
-                xyxy = _clip_box(box, *FRAMES_WH)
+                xyxy = _clip_box(box, image.width, image.height)
                 if xyxy is not None:
                     boxes.append(DetectedBox(kind, score, xyxy, 0))
             grouped.append(boxes)
@@ -176,6 +196,14 @@ def _clip_box(box, width, height):
     x0, x1 = max(0., x0), min(float(width), x1)
     y0, y1 = max(0., y0), min(float(height), y1)
     return (x0, y0, x1, y1) if x1 > x0 and y1 > y0 else None
+
+
+def place_tile_box(tile, box):
+    left, top, right, bottom = tile.crop
+    a, b, c, d = box.xyxy
+    if tile.tile and min(a, b, right-left-c, bottom-top-d) <= 2.:
+        return None
+    return replace(box, tile=tile.tile, xyxy=(left+a, top+b, left+c, top+d))
 
 
 def depth_sample(depth, box):
