@@ -1,0 +1,275 @@
+{
+  "schema": "hybrid-drive-vru-clip-sources-v1",
+  "dataset": "OpenScene v1.1 Mini",
+  "dataset_revision": "a76f840b65e972bc45e56c2adced897498e9a026",
+  "publisher_mapping_url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_0-31.json",
+  "publisher_mapping_sha256": "7c8a6cded3b688d252c070879afc008101c0f3e1576a3ad8de696748451c6075",
+  "metadata_archive": {
+    "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_metadata_mini.tgz",
+    "size_bytes": 534344190,
+    "sha256": "c2e08867e062ba916eccd56df191e728d42fb94de854c28f2226eed14cecd8be"
+  },
+  "previous_recordings": [
+    "2021.05.12.23.36.44_veh-35",
+    "2021.06.03.12.02.06_veh-35",
+    "2021.06.07.12.54.00_veh-35",
+    "2021.06.07.18.53.26_veh-26",
+    "2021.06.09.14.03.17_veh-12",
+    "2021.06.09.14.58.55_veh-35",
+    "2021.06.09.17.23.18_veh-38",
+    "2021.06.14.16.32.09_veh-35",
+    "2021.06.14.18.42.45_veh-12",
+    "2021.06.14.19.22.11_veh-38",
+    "2021.06.23.16.54.19_veh-35",
+    "2021.06.23.17.31.36_veh-16",
+    "2021.06.28.15.02.02_veh-38",
+    "2021.07.16.20.45.29_veh-35",
+    "2021.07.24.23.50.16_veh-17",
+    "2021.08.09.17.55.59_veh-28",
+    "2021.08.17.16.57.11_veh-08",
+    "2021.08.24.13.12.55_veh-45",
+    "2021.08.30.14.54.34_veh-40",
+    "2021.10.01.19.16.42_veh-28",
+    "2021.10.05.07.10.04_veh-52",
+    "2021.10.06.17.43.07_veh-28",
+    "2021.10.11.02.57.41_veh-50"
+  ],
+  "camera_archives": {
+    "2": {
+      "filename": "openscene_sensor_mini_camera_2.tgz",
+      "size_bytes": 3323562850,
+      "sha256": "76151307753dfa5e735c821eb80a26fe0f4395a827896aefbf38160cc650a879",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_2.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "7": {
+      "filename": "openscene_sensor_mini_camera_7.tgz",
+      "size_bytes": 3488226528,
+      "sha256": "4e0c91f486cdfec91a946d04a10416e0a8bdc84d7a5afa95da25ae2d1b257342",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_7.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "8": {
+      "filename": "openscene_sensor_mini_camera_8.tgz",
+      "size_bytes": 2566297517,
+      "sha256": "898b86d45d726579c7ae0a596fd8526f97eb7e7b528eee4f9c54c1f414d3457f",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_8.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "9": {
+      "filename": "openscene_sensor_mini_camera_9.tgz",
+      "size_bytes": 3082055292,
+      "sha256": "bd628b3408cbae778299b6baa12fec14af96b94d37a78537f6d54062e64bd0b0",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_9.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "10": {
+      "filename": "openscene_sensor_mini_camera_10.tgz",
+      "size_bytes": 2855653184,
+      "sha256": "de39c04859029a2c5234459e2a942281b7e15c340f233142459a2874841f7ce4",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_10.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "13": {
+      "filename": "openscene_sensor_mini_camera_13.tgz",
+      "size_bytes": 2983801845,
+      "sha256": "2c4de9e1436e3c0435a59189602b05e5308905727ff4564db54370201e0aed7a",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_13.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "14": {
+      "filename": "openscene_sensor_mini_camera_14.tgz",
+      "size_bytes": 3178353684,
+      "sha256": "aa2b91cc0e38010ba0a1ab47efaa2c732f0567100189dd685ebd7ea81c6a4374",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_14.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "18": {
+      "filename": "openscene_sensor_mini_camera_18.tgz",
+      "size_bytes": 3001336242,
+      "sha256": "f5104fe380f55802e8d36bae77c6e66f03323eb55ca32fa06418f1a03fc0e534",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_18.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "21": {
+      "filename": "openscene_sensor_mini_camera_21.tgz",
+      "size_bytes": 2113687984,
+      "sha256": "2ae6227db7f627bb0ae36705d903c79f21a91e3ec143d0bf9ea158251d247ea5",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_21.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "25": {
+      "filename": "openscene_sensor_mini_camera_25.tgz",
+      "size_bytes": 3410003332,
+      "sha256": "420582f3aaaaac827a7223ec73061de19cb52029a6738d18390507ff07353113",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_25.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "27": {
+      "filename": "openscene_sensor_mini_camera_27.tgz",
+      "size_bytes": 3691547158,
+      "sha256": "519d74b4c503efc9a51c2b8f04388d027fff681407bfa41ad1e9163a94c39b2a",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_27.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "28": {
+      "filename": "openscene_sensor_mini_camera_28.tgz",
+      "size_bytes": 2542641523,
+      "sha256": "c6e3577a496cf33a1cd09077966f8773d7a3d1f972ac84696f23ad0da4143669",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_28.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "29": {
+      "filename": "openscene_sensor_mini_camera_29.tgz",
+      "size_bytes": 3475123231,
+      "sha256": "daa202e9acc50b8be62d7d6d65ff7258d8a787e5067c02b2df7fc5a95645bad2",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_29.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    },
+    "31": {
+      "filename": "openscene_sensor_mini_camera_31.tgz",
+      "size_bytes": 2985688931,
+      "sha256": "90516eaa8df8e2b1d5902823b69509e72779c623580ac594fcf2a717ae81f2d2",
+      "url": "https://huggingface.co/datasets/OpenDriveLab/OpenScene/resolve/a76f840b65e972bc45e56c2adced897498e9a026/openscene-v1.1/openscene_sensor_mini_camera/openscene_sensor_mini_camera_31.tgz",
+      "archive_prefix": "openscene-v1.1/sensor_blobs/mini"
+    }
+  },
+  "logs": [
+    {
+      "recording": "2021.06.28.16.57.59_veh-26",
+      "log_name": "2021.06.28.16.57.59_veh-26_00016_00484",
+      "camera_shard": 2,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.28.16.57.59_veh-26_00016_00484.pkl",
+      "size_bytes": 19562611,
+      "sha256": "2b49ece58d1628129e4b423e5766e678c968fe69a89f09420f06b6b8f907b03c"
+    },
+    {
+      "recording": "2021.06.08.12.54.54_veh-26",
+      "log_name": "2021.06.08.12.54.54_veh-26_04262_04732",
+      "camera_shard": 7,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.08.12.54.54_veh-26_04262_04732.pkl",
+      "size_bytes": 24334391,
+      "sha256": "51c94f42a7c7b823563e2e356fccf1d155932e5a6c8f09a3780f18ffc06aa8a0"
+    },
+    {
+      "recording": "2021.08.17.18.54.02_veh-45",
+      "log_name": "2021.08.17.18.54.02_veh-45_00665_01065",
+      "camera_shard": 8,
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.17.18.54.02_veh-45_00665_01065.pkl",
+      "size_bytes": 5392622,
+      "sha256": "3f8a4d944616c1ee1d8fa37a025bd99a193782da351b4f1a9e0ead989643b5cd"
+    },
+    {
+      "recording": "2021.09.16.15.12.03_veh-42",
+      "log_name": "2021.09.16.15.12.03_veh-42_01037_01434",
+      "camera_shard": 9,
+      "member": "openscene-v1.1/meta_datas/mini/2021.09.16.15.12.03_veh-42_01037_01434.pkl",
+      "size_bytes": 5347836,
+      "sha256": "70f45afe8094302d9985e837cbe2833e3c975d7d5a5ce12c5ee2dcff83e57503"
+    },
+    {
+      "recording": "2021.07.09.17.06.37_veh-35",
+      "log_name": "2021.07.09.17.06.37_veh-35_00258_00748",
+      "camera_shard": 10,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.09.17.06.37_veh-35_00258_00748.pkl",
+      "size_bytes": 20354196,
+      "sha256": "ec82b2175389345a6f9b5c7b1e26bbbc888363a62c60666055d24e0e4ad42aeb"
+    },
+    {
+      "recording": "2021.07.16.00.51.05_veh-17",
+      "log_name": "2021.07.16.00.51.05_veh-17_01352_01901",
+      "camera_shard": 13,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.16.00.51.05_veh-17_01352_01901.pkl",
+      "size_bytes": 31868719,
+      "sha256": "0afb582894f55de0f8901d14920c93594b5f3a06f039a438b6b6ef18645e4cd8"
+    },
+    {
+      "recording": "2021.08.17.17.17.01_veh-45",
+      "log_name": "2021.08.17.17.17.01_veh-45_02314_02798",
+      "camera_shard": 14,
+      "member": "openscene-v1.1/meta_datas/mini/2021.08.17.17.17.01_veh-45_02314_02798.pkl",
+      "size_bytes": 8109399,
+      "sha256": "fef8a6494db680ead4aa4b8c7a2cfcf4ef4c6619215d908a78d213e0d1b81b02"
+    },
+    {
+      "recording": "2021.06.08.14.35.24_veh-26",
+      "log_name": "2021.06.08.14.35.24_veh-26_02555_03004",
+      "camera_shard": 18,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.08.14.35.24_veh-26_02555_03004.pkl",
+      "size_bytes": 14066014,
+      "sha256": "5babc3c8927e221971f3f8e61b2654e676e277642644052aaa266efecc888658"
+    },
+    {
+      "recording": "2021.07.16.18.06.21_veh-38",
+      "log_name": "2021.07.16.18.06.21_veh-38_04933_05307",
+      "camera_shard": 18,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.16.18.06.21_veh-38_04933_05307.pkl",
+      "size_bytes": 25972411,
+      "sha256": "4e79811a8c7281fc5cfc88044d7862c5dfda330c6a6f9468dbf323e6f9de4f32"
+    },
+    {
+      "recording": "2021.06.09.12.39.51_veh-26",
+      "log_name": "2021.06.09.12.39.51_veh-26_05620_06003",
+      "camera_shard": 21,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.09.12.39.51_veh-26_05620_06003.pkl",
+      "size_bytes": 20265187,
+      "sha256": "2a0cba15234be59a26981e2cce893b9f684cce0574b1572a1a96c12a3f181c7d"
+    },
+    {
+      "recording": "2021.05.25.14.16.10_veh-35",
+      "log_name": "2021.05.25.14.16.10_veh-35_01690_02183",
+      "camera_shard": 25,
+      "member": "openscene-v1.1/meta_datas/mini/2021.05.25.14.16.10_veh-35_01690_02183.pkl",
+      "size_bytes": 25432639,
+      "sha256": "a68091f15db649f6233c603715d78168be0204fd0d2c4b48bf7a16706f61ac7f"
+    },
+    {
+      "recording": "2021.07.09.20.59.12_veh-38",
+      "log_name": "2021.07.09.20.59.12_veh-38_01208_01692",
+      "camera_shard": 25,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.09.20.59.12_veh-38_01208_01692.pkl",
+      "size_bytes": 22195537,
+      "sha256": "f4528b69f75a8383f4fa799a6bdb5bab651cf305cb5b0ae2d59512d4d531a318"
+    },
+    {
+      "recording": "2021.07.16.18.06.21_veh-38",
+      "log_name": "2021.07.16.18.06.21_veh-38_03231_03712",
+      "camera_shard": 27,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.16.18.06.21_veh-38_03231_03712.pkl",
+      "size_bytes": 22561191,
+      "sha256": "02f7054f92065aa6d18cd6eaca9bdb1e1adf315164a4223e16792224b085ad3e"
+    },
+    {
+      "recording": "2021.06.09.12.39.51_veh-26",
+      "log_name": "2021.06.09.12.39.51_veh-26_01943_02303",
+      "camera_shard": 28,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.09.12.39.51_veh-26_01943_02303.pkl",
+      "size_bytes": 13449955,
+      "sha256": "4ac8a724d7060ab00099874270944fa018364f688c13f1c0da37d5a5f2c2511e"
+    },
+    {
+      "recording": "2021.06.08.16.31.33_veh-38",
+      "log_name": "2021.06.08.16.31.33_veh-38_01589_02072",
+      "camera_shard": 29,
+      "member": "openscene-v1.1/meta_datas/mini/2021.06.08.16.31.33_veh-38_01589_02072.pkl",
+      "size_bytes": 25841676,
+      "sha256": "64fe189b0ab57151b57f3aaf230e7f706d5f32b8af0bb50d648e85a0404eb554"
+    },
+    {
+      "recording": "2021.07.16.18.06.21_veh-38",
+      "log_name": "2021.07.16.18.06.21_veh-38_04471_04922",
+      "camera_shard": 31,
+      "member": "openscene-v1.1/meta_datas/mini/2021.07.16.18.06.21_veh-38_04471_04922.pkl",
+      "size_bytes": 19362606,
+      "sha256": "9550ad5bfd09794942c1707312a23be433f59f9b0b9987051567a88307adf2f2"
+    },
+    {
+      "recording": "2021.10.06.07.26.10_veh-52",
+      "log_name": "2021.10.06.07.26.10_veh-52_00006_00398",
+      "camera_shard": 31,
+      "member": "openscene-v1.1/meta_datas/mini/2021.10.06.07.26.10_veh-52_00006_00398.pkl",
+      "size_bytes": 4231293,
+      "sha256": "d833da0e87cfa55c834e98d3e3d666cb2fc01a7af6642ffb43e17d6f5aecb1b7"
+    }
+  ]
+}
