@@ -14,7 +14,10 @@ from hybrid_drive.experiments.object_vru_geometry import GroundHit, _appearance,
 from hybrid_drive.geometry.rigid import invert_pose
 
 
-MODEL_MANIFEST_SHA256 = "d33cf82ad2ebdaca45bb29b36c045d742b645b5ed0d46ddde1a6389f9151b8ac"
+MODEL_MANIFESTS_SHA256 = frozenset({
+    "d33cf82ad2ebdaca45bb29b36c045d742b645b5ed0d46ddde1a6389f9151b8ac",
+    "3d3cc63b2d5a70d57bd7d0c8d300d7d38c080b5e4bee6ccc237ed8c4c938ad88",
+})
 FRAMES_WH = (768, 432)
 MODEL_VERSIONS = {"torch": "2.8.0", "torchvision": "0.23.0", "transformers": "4.57.3"}
 SCORE_FLOOR = {"person": .25, "bicycle": .20}
@@ -30,7 +33,7 @@ class DepthSample:
 def model_profiles(root, manifest_path):
     """Validate exactly the prepared upstream configurations before loading weights."""
     payload = read_bounded(manifest_path, 16384)
-    if sha256(payload).hexdigest() != MODEL_MANIFEST_SHA256:
+    if sha256(payload).hexdigest() not in MODEL_MANIFESTS_SHA256:
         raise ValueError("Expected the pinned metric perception model manifest")
     manifest = decode_json(payload)
     verified = {}

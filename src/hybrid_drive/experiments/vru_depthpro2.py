@@ -1,7 +1,8 @@
-"""Causal Depth Pro 2 S/W4 Core ML adapter for pinned rectified camera frames."""
+"""Causal Depth Pro 2 W4 Core ML adapter for pinned rectified camera frames."""
 
 from __future__ import annotations
 
+from hashlib import sha256
 import math
 import os
 from pathlib import Path
@@ -16,6 +17,8 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
+from hybrid_drive.assets.files import check_components, verify_file
+from hybrid_drive.experiments.bounded_io import canonical_json, decode_json, read_bounded, require_hex, require_keys
 from hybrid_drive.geometry.camera import CameraCalibration
 
 
@@ -25,6 +28,51 @@ _CAMERA_SLOTS = 6
 _DEPTH_BYTES = _WIDTH * _HEIGHT * 4
 _REQUEST = Struct("<4sBBH")
 _REPLY = Struct("<4sI")
+PINNED_MANIFESTS_SHA256 = frozenset({
+    "d0b1efcaa538ed6bff8bc25a3f4a3e6b7a87fd33bb31436ae73d6fca20eb3bf6",
+    "516b3bb979e42d6a894f38ec4ac170f91b99c2a75d08e48b6d7dcd951704274b",
+})
+PROFILE_KEYS = {"worker_sha256", "checkpoint_manifest_sha256", "compiled_bundle_sha256"}
+
+
+def checkpoint_profile(worker, compiled, manifest):
+    """Bind the executable and compiled bundle, verifying the pinned weight bytes."""
+    raw = read_bounded(manifest, 16384)
+    manifest_sha = sha256(raw).hexdigest()
+    if manifest_sha not in PINNED_MANIFESTS_SHA256:
+        raise ValueError("Expected a pinned Depth Pro 2 checkpoint manifest")
+    spec = decode_json(raw)
+    compiled = Path(compiled)
+    check_components(compiled)
+    if compiled.name != Path(spec["directory"]).with_suffix(".mlmodelc").name or not compiled.is_dir():
+        raise ValueError("Expected the compiled Depth Pro 2 bundle for this manifest")
+    weights = spec["files"]["Data/com.apple.CoreML/weights/weight.bin"]
+    weight_name = "weights/weight.bin"
+    if verify_file(compiled / weight_name, **weights) is None:
+        raise ValueError("Compiled Depth Pro 2 bundle is missing pinned weights")
+    fingerprints = {}
+    for i, path in enumerate(compiled.rglob("*")):
+        if i >= 64:
+            raise ValueError("Unexpected Depth Pro 2 bundle layout")
+        check_components(path)
+        if not path.is_file():
+            continue
+        name = path.relative_to(compiled).as_posix()
+        fingerprints[name] = weights["sha256"] if name == weight_name else sha256(read_bounded(path, 16 * 1024**2)).hexdigest()
+    if "model.mil" not in fingerprints or weight_name not in fingerprints:
+        raise ValueError("Expected a complete compiled Depth Pro 2 graph and weights")
+    return {"worker_sha256": sha256(read_bounded(worker, 16 * 1024**2)).hexdigest(),
+            "checkpoint_manifest_sha256": manifest_sha,
+            "compiled_bundle_sha256": sha256(canonical_json(fingerprints)).hexdigest()}
+
+
+def validate_depthpro_profile(profile):
+    require_keys(profile, PROFILE_KEYS, "Depth Pro 2 execution profile")
+    for name, digest in profile.items():
+        require_hex(digest, 64, name)
+    if profile["checkpoint_manifest_sha256"] not in PINNED_MANIFESTS_SHA256:
+        raise ValueError("Expected a pinned Depth Pro 2 checkpoint manifest")
+    return profile
 
 
 class DepthPro2Error(RuntimeError):

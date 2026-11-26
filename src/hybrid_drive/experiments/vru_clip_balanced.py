@@ -21,7 +21,8 @@ def score_balanced_development(root, candidate_path, labels_path, output, *,
     candidate = sealed_read(candidate_path, candidate_sha256)
     index, digest = load_development_inputs(root), index_sha(root)
     _bind_capture(candidate, digest, SPLIT)
-    depth = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, SPLIT, len(index["anchors"]))
+    depth, depthpro_profile = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, SPLIT,
+                                             len(index["anchors"]))
     arms = (*MODEL_ARMS, "dfine_calibrated") + (("dfine_depthpro",) if depthpro_path is not None else ())
     forecasts = {arm: [] for arm in arms}
     for anchor, window, apple in zip(index["anchors"], candidate["observations"], depth, strict=True):
@@ -37,6 +38,6 @@ def score_balanced_development(root, candidate_path, labels_path, output, *,
     output.mkdir(parents=True)
     write_json(output/"score.json", {"schema": DEVELOPMENT_SCORE, "input_sha256": digest,
                "candidate_sha256": candidate_sha256, "candidate_profile": candidate["profile"],
-               "depthpro_sha256": depthpro_sha256, "purpose": "balanced_development_only",
+               "depthpro_sha256": depthpro_sha256, "depthpro_profile": depthpro_profile, "purpose": "balanced_development_only",
                "scores": scores})
     return {name: score["counts"] for name, score in scores.items()}

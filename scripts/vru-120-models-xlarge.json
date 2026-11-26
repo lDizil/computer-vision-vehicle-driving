@@ -1,0 +1,39 @@
+{
+  "schema": "hybrid-drive-vru-120-models-v1",
+  "detector": {
+    "repo": "ustc-community/dfine-xlarge-obj2coco",
+    "revision": "15f18d917eaddcedf9e3ffb082adcfb97a0b2d4d",
+    "files": {
+      "config.json": {
+        "bytes": 6974,
+        "git_blob_sha1": "8ed6f0857dc47c906cc617a140502bc5a0bd251f"
+      },
+      "preprocessor_config.json": {
+        "bytes": 470,
+        "git_blob_sha1": "ea1fbb1edd242104e70301472d089735c68c5f21"
+      },
+      "model.safetensors": {
+        "bytes": 251619400,
+        "sha256": "19246b6d70c175d552752c8b7fac9b37516d8b14df2476a2cfd174837fc4df37"
+      }
+    }
+  },
+  "depth": {
+    "repo": "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf",
+    "revision": "fd2c22027eaf20374204f14099b8341e1925ad39",
+    "files": {
+      "config.json": {
+        "bytes": 1063,
+        "git_blob_sha1": "d3569a37f098a26fb76fd33ae6ba23e33bea1a13"
+      },
+      "preprocessor_config.json": {
+        "bytes": 437,
+        "git_blob_sha1": "4b48811870a9d567ee23549c08249fe943e57916"
+      },
+      "model.safetensors": {
+        "bytes": 99173660,
+        "sha256": "ad065c77a7421ca55159a1f0db9433397a607690f2d76bb8a6fc54b1be7a3124"
+      }
+    }
+  }
+}

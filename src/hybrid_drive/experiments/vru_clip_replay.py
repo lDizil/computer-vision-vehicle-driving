@@ -50,7 +50,7 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
                      mask_model=None, mask_manifest=None, mask_device="cpu"):
     from hybrid_drive.experiments.box_motion_inputs import load_motion_snapshot
     from hybrid_drive.experiments.object_vru_detector import DetectedBox
-    from hybrid_drive.experiments.vru_depthpro2 import DepthPro2
+    from hybrid_drive.experiments.vru_depthpro2 import DepthPro2, checkpoint_profile
     from hybrid_drive.experiments.vru_metric_detector import _camera_observations
 
     ensure_new_output(output)
@@ -58,6 +58,7 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
     candidate = sealed_read(candidate_path, candidate_sha256)
     index, digest = _sensor_index(input_root, split), index_sha(input_root)
     _bind_capture(candidate, digest, split)
+    profile = checkpoint_profile(worker, compiled, manifest)
     masker = _mask_model(mask_model, mask_manifest, mask_device)
     rows = []
     with DepthPro2(worker, compiled) as depth:
@@ -94,8 +95,7 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
     seal = save_sealed(output, "observations.json", {
         "schema": DEPTHPRO_SCHEMA, "split": split, "revision": revision, "input_sha256": digest,
         "candidate_sha256": candidate_sha256, "labels_read": False, "observations": rows,
-        "worker_sha256": sha256(read_bounded(worker, 16 * 1024**2)).hexdigest(),
-        "checkpoint_manifest_sha256": sha256(read_bounded(manifest, 16384)).hexdigest(),
+        **profile,
         "mask_profile": None if masker is None else {"checkpoint_manifest_sha256": sha256(read_bounded(mask_manifest, 16384)).hexdigest(),
                                                      "device": mask_device},
         "causal_order": list(FRAMES),
@@ -194,7 +194,8 @@ def score_development(root, candidate_path, baseline_path, labels_path, history_
     index, digest = _sensor_index(root, "development"), index_sha(root)
     _bind_capture(candidate, digest, "development")
     baseline = load_chain_observations(index, digest, baseline_path, baseline_sha256)
-    apple = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, "development", len(index["anchors"]))
+    apple, depthpro_profile = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, "development",
+                                             len(index["anchors"]))
     captures = tuple(zip(index["anchors"], candidate["observations"], baseline["windows"], apple, strict=True))
     for anchor, fresh, old, metric in captures:
         validate_anchor(anchor, fresh)
@@ -226,7 +227,7 @@ def score_development(root, candidate_path, baseline_path, labels_path, history_
               for name, rows in predictions.items()}
     result = {"schema": DEVELOPMENT_SCORE, "input_sha256": digest, "candidate_sha256": candidate_sha256,
               "candidate_profile": candidate["profile"],
-              "baseline_sha256": baseline_sha256, "depthpro_sha256": depthpro_sha256,
+              "baseline_sha256": baseline_sha256, "depthpro_sha256": depthpro_sha256, "depthpro_profile": depthpro_profile,
               "purpose": "development_only_not_the_fixed_120_clip_control",
               "captured": len(captures), "eligible_with_primary": len(truth), "scores": scores}
     output.mkdir(parents=True)
@@ -252,7 +253,7 @@ def _validate_comparable_cameras(fresh, old):
 
 def _bound_depthpro(path, seal, camera_seal, digest, split, count):
     if path is None and seal is None:
-        return (None,) * count
+        return (None,) * count, None
     if path is None or seal is None:
         raise ValueError("A Depth Pro 2 artifact and its SHA must be supplied together")
     capture = sealed_read(path, seal)
@@ -261,7 +262,12 @@ def _bound_depthpro(path, seal, camera_seal, digest, split, count):
             or capture["labels_read"] is not False or capture["causal_order"] != list(FRAMES)):
         raise ValueError("Expected the fixed causal depth estimate for the same input-only detector boxes")
     require_hex(capture["revision"], 40, "Depth Pro 2 revision")
-    return capture["observations"]
+    # Previously measured development output is replayable, but cannot freeze a release without a bundle identity.
+    if "compiled_bundle_sha256" not in capture:
+        return capture["observations"], None
+    from hybrid_drive.experiments.vru_depthpro2 import PROFILE_KEYS, validate_depthpro_profile
+
+    return capture["observations"], validate_depthpro_profile({key: capture.get(key) for key in PROFILE_KEYS})
 
 
 def _validate_depthpro_cameras(fresh, apple):

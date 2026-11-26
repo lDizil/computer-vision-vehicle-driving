@@ -74,6 +74,12 @@ def freeze_release(dev_path, control_root, output, *, dev_sha256, arm, revision)
     count, passed = result["clips"], result["passed"]
     if type(count) is not int or type(passed) is not int or count < 30 or not ceil(count*REQUIRED_PASS/CONTROL_CLIPS) <= passed <= count:
         raise ValueError("Save the untouched control until a development candidate reaches the release bar")
+    depthpro_profile = None
+    if arm == "dfine_depthpro":
+        from hybrid_drive.experiments.vru_depthpro2 import validate_depthpro_profile
+
+        require_hex(development.get("depthpro_sha256"), 64, "development depth artifact SHA256")
+        depthpro_profile = validate_depthpro_profile(development.get("depthpro_profile"))
     control_index(control_root)
     control_sha = index_sha(control_root)
     if control_sha == development["input_sha256"]:
@@ -83,6 +89,7 @@ def freeze_release(dev_path, control_root, output, *, dev_sha256, arm, revision)
         "input_sha256": control_sha, "development_score_sha256": dev_sha256,
         "development_clips": count, "development_passed": passed,
         "candidate_profile": development["candidate_profile"],
+        "depthpro_profile": depthpro_profile,
         "threshold": {"clips": CONTROL_CLIPS, "passed": REQUIRED_PASS},
     })
     return {"arm": arm, "release_sha256": seal}
@@ -107,7 +114,10 @@ def score_control(root, baseline_path, candidate_path, release_path, labels_path
     arm = release["arm"]
     if (depthpro_path is not None) != (arm == "dfine_depthpro"):
         raise ValueError("The frozen release determines which depth artifact can be evaluated")
-    depth = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, "control", CONTROL_CLIPS)
+    depth, depthpro_profile = _bound_depthpro(depthpro_path, depthpro_sha256, candidate_sha256, digest, "control", CONTROL_CLIPS)
+    if ((arm == "dfine_depthpro" and depthpro_profile is None)
+            or depthpro_profile != release.get("depthpro_profile")):
+        raise ValueError("Control depth checkpoint, graph and worker must match the frozen development profile")
     before, after = [], []
     for anchor, old, new, apple in zip(index["anchors"], baseline["windows"], candidate["observations"], depth, strict=True):
         validate_anchor(anchor, old)
