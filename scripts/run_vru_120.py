@@ -22,6 +22,9 @@ def main(argv=None):
     depthpro.add_argument("--split", choices=("development", "control"), required=True)
     depthpro.add_argument("--candidate-sha256", required=True)
     depthpro.add_argument("--revision", required=True)
+    depthpro.add_argument("--mask-model", type=Path)
+    depthpro.add_argument("--mask-manifest", type=Path)
+    depthpro.add_argument("--mask-device", choices=("cpu", "mps"), default="cpu")
     baseline = commands.add_parser("capture-baseline")
     _paths(baseline, "inputs", "ssd-weights", "faster-weights", "output")
     baseline.add_argument("--revision", required=True)
@@ -62,7 +65,8 @@ def main(argv=None):
         from hybrid_drive.experiments.vru_clip_replay import capture_depthpro
 
         result = capture_depthpro(args.inputs, args.candidate, args.worker, args.compiled, args.manifest, args.output,
-                                  split=args.split, candidate_sha256=args.candidate_sha256, revision=args.revision)
+                                  split=args.split, candidate_sha256=args.candidate_sha256, revision=args.revision,
+                                  mask_model=args.mask_model, mask_manifest=args.mask_manifest, mask_device=args.mask_device)
     elif args.command == "capture-baseline":
         import torch
         from hybrid_drive.experiments.vru_clip_control import capture_baseline

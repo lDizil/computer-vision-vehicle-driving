@@ -46,7 +46,8 @@ def capture_candidate(input_root, models, manifest, output, *, split, revision, 
     return {"windows": len(windows), "sha256": seal}
 
 
-def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, output, *, split, candidate_sha256, revision):
+def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, output, *, split, candidate_sha256, revision,
+                     mask_model=None, mask_manifest=None, mask_device="cpu"):
     from hybrid_drive.experiments.box_motion_inputs import load_motion_snapshot
     from hybrid_drive.experiments.object_vru_detector import DetectedBox
     from hybrid_drive.experiments.vru_depthpro2 import DepthPro2
@@ -57,6 +58,7 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
     candidate = sealed_read(candidate_path, candidate_sha256)
     index, digest = _sensor_index(input_root, split), index_sha(input_root)
     _bind_capture(candidate, digest, split)
+    masker = _mask_model(mask_model, mask_manifest, mask_device)
     rows = []
     with DepthPro2(worker, compiled) as depth:
         for anchor, source in zip(index["anchors"], candidate["observations"], strict=True):
@@ -72,7 +74,7 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
                 shot = load_motion_snapshot(input_root, token, index["frames"][token], rectified_wh=FRAME_SIZE)
                 if shot.content_sha256 != evidence["sha256"]:
                     raise ValueError("Depth model and 2D boxes must use the same local camera observation")
-                hits = []
+                hits, refined_hits = [], []
                 for position, (view, row) in enumerate(zip(shot.views, evidence["camera_evidence"], strict=True)):
                     name = view.calibration.name
                     if name != row["camera_name"]:
@@ -81,7 +83,11 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
                     boxes = tuple(DetectedBox(item["kind"], item["confidence"], item["xyxy"], 0) for item in row["boxes"])
                     _, _, metric = _camera_observations(view, boxes, raster, position)
                     hits.extend(metric)
+                    if masker is not None and boxes:
+                        refined_hits.extend(_mask_observations(masker, view, boxes, raster, position, metric))
                 result[phase] = {"sha256": shot.content_sha256, "objects": [asdict(obj) for obj in fuse_ground_hits(hits)]}
+                if masker is not None:
+                    result[phase]["masked_objects"] = [asdict(obj) for obj in fuse_ground_hits(refined_hits)]
             rows.append({**anchor, "observations": result})
             if len(rows) % 8 == 0:
                 print(f"Depth Pro 2: {len(rows)}/{len(index['anchors'])} clips", flush=True)
@@ -90,9 +96,36 @@ def capture_depthpro(input_root, candidate_path, worker, compiled, manifest, out
         "candidate_sha256": candidate_sha256, "labels_read": False, "observations": rows,
         "worker_sha256": sha256(read_bounded(worker, 16 * 1024**2)).hexdigest(),
         "checkpoint_manifest_sha256": sha256(read_bounded(manifest, 16384)).hexdigest(),
+        "mask_profile": None if masker is None else {"checkpoint_manifest_sha256": sha256(read_bounded(mask_manifest, 16384)).hexdigest(),
+                                                     "device": mask_device},
         "causal_order": list(FRAMES),
     })
     return {"windows": len(rows), "sha256": seal}
+
+
+def _mask_model(model, manifest, device):
+    if model is None and manifest is None:
+        return None
+    if model is None or manifest is None:
+        raise ValueError("SAM 2 requires a local checkpoint and a pinned manifest")
+    from hybrid_drive.experiments.vru_sam_mask import SamBoxMasks
+
+    return SamBoxMasks(model, manifest, device=device)
+
+
+def _mask_observations(masker, view, boxes, depth, camera_index, baseline_hits):
+    from hybrid_drive.experiments.vru_metric_detector import metric_hit
+    from hybrid_drive.experiments.vru_sam_mask import masked_depth_sample
+
+    masks = masker.predict(view.rgb, [box.xyxy for box in boxes])
+    fallback = {hit.detection_id: hit for hit in baseline_hits}
+    for i, (box, mask) in enumerate(zip(boxes, masks, strict=True)):
+        ident = f"v{camera_index}-b{i}"
+        measured = masked_depth_sample(depth, box.xyxy, mask) if mask is not None else None
+        refined = metric_hit(view, box, measured, detection_id=ident) if measured is not None else None
+        hit = refined if refined is not None else fallback.get(ident)
+        if hit is not None:
+            yield hit
 
 
 def _sensor_index(root, split):
@@ -178,6 +211,9 @@ def score_development(root, candidate_path, baseline_path, labels_path, history_
         if metric is not None:
             arms["dfine_depthpro"] = {phase: read_ground_objects(metric["observations"][phase]["objects"])
                                      for phase in FRAMES}
+            if "masked_objects" in metric["observations"]["current"]:
+                arms["dfine_masked"] = {phase: read_ground_objects(metric["observations"][phase]["masked_objects"])
+                                        for phase in FRAMES}
         for name, frames in arms.items():
             predictions.setdefault(name, []).append(replay_clip(anchor, index, frames))
     if not truth:
