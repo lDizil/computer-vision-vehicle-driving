@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
 
@@ -88,18 +89,17 @@ def test_clip_label_coordinates_align_history_to_current_ego(monkeypatch):
     assert label["frames"]["current"][1]["kind"] == "bicycle"
 
 
-def test_labels_bind_anchor_and_require_same_primary_at_all_observations(monkeypatch):
-    monkeypatch.setattr(data, "_TOTAL", 3)
-    monkeypatch.setattr(data, "_PER_BAND", 1)
+def test_labels_bind_anchor_and_require_same_primary_at_all_observations():
+    profile = replace(data._CONTROL_PROFILE, selection=data._Selection(per_band=1, min_groups=1, max_per_group=3))
     index = {"anchors": [{"sample_token": str(i), "recording": "recording"} for i in range(3)]}
     token = "a" * 16
     rows = [{**row, "primary_id": token, "frames": {
         phase: [{"track_id": token, "kind": "person", "xy_m": [distance, 0.0]}] for phase in data._PHASES
     }} for row, distance in zip(index["anchors"], (4, 10, 20), strict=True)]
     labels = {"schema": data.LABEL_SCHEMA, "input_sha256": "bound", "rows": rows}
-    data._validate_labels(labels, index, "bound")
+    data._validate_labels(labels, index, "bound", profile=profile)
     with pytest.raises(ValueError, match="exact frozen index"):
-        data._validate_labels(labels, index, "different")
+        data._validate_labels(labels, index, "different", profile=profile)
     rows[0]["frames"]["older"] = []
     with pytest.raises(ValueError, match="primary annotation"):
-        data._validate_labels(labels, index, "bound")
+        data._validate_labels(labels, index, "bound", profile=profile)
