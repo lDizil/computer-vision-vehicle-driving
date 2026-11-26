@@ -98,7 +98,7 @@ def _forecast(obj, selected, baseline):
         "motions": {"appearance": asdict(baseline.initial), "geometry": asdict(baseline.geometry)},
         "confirmation": asdict(confirmation),
         "forecasts": {"stationary": (0., 0.), "two_frame": pair,
-                      "confirmed_two_frame": pair if confirmation.status == "confirmed" else (0., 0.),
+                      "confirmed_two_frame": pair_velocity(selected) if confirmation.status == "confirmed" else (0., 0.),
                       "three_frame_trend": confirmation.trend_velocity_xy_mps},
         "trace": {"origin_arm": selected.origin_arm, "origin_object_id": selected.origin_object_id,
                   "initial": _link(selected.initial), "older": _link(selected.older), "rescue": selected.rescue},

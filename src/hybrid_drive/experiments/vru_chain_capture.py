@@ -4,11 +4,10 @@ from dataclasses import asdict
 from hashlib import sha256
 
 from hybrid_drive.experiments.bounded_io import canonical_json, decode_json, read_bounded, require_hex
-from hybrid_drive.experiments.box_motion_inputs import load_motion_snapshot
 from hybrid_drive.experiments.io import write_json
 from hybrid_drive.experiments.object_vru_geometry import GroundHit, GroundObject
 from hybrid_drive.experiments.vru_chain_rescue import SINGLES
-from hybrid_drive.experiments.vru_fusion_holdout_data import load_fusion_inputs
+from hybrid_drive.experiments.vru_fusion_holdout_data import INDEX_LIMIT, load_fusion_inputs
 
 
 CAPTURE_SCHEMA = "hybrid-drive-vru-chain-capture-v1"
@@ -18,6 +17,7 @@ _MAX_ARTIFACT_BYTES = 32 * 1024**2
 
 
 def capture_chain_observations(input_root, ssd_weights, faster_weights, output, *, revision):
+    from hybrid_drive.experiments.box_motion_inputs import load_motion_snapshot
     from hybrid_drive.experiments.object_vru_detector import LocalVruDetector, RECTIFIED_WH
     from hybrid_drive.experiments.vru_coverage_detector import CoverageDetector
 
@@ -27,7 +27,7 @@ def capture_chain_observations(input_root, ssd_weights, faster_weights, output, 
     models = dict(zip(SINGLES, (LocalVruDetector(ssd_weights), CoverageDetector(faster_weights)), strict=True))
 
     def observe(anchor):
-        return _observe(input_root, index, anchor, models, RECTIFIED_WH)
+        return _observe(input_root, index, anchor, models, RECTIFIED_WH, load_motion_snapshot)
 
     windows = []
     for anchor in index["anchors"]:
@@ -47,14 +47,14 @@ def capture_chain_observations(input_root, ssd_weights, faster_weights, output, 
     return {"windows": len(windows), "rechecked": len(rechecks), "capture_sha256": seal}
 
 
-def _observe(root, index, anchor, models, size):
+def _observe(root, index, anchor, models, size, load_snapshot):
     result = {}
     for phase, key in zip(TIMES, TOKENS, strict=True):
         token = anchor[key]
         if token is None:
             result[phase] = None
             continue
-        shot = load_motion_snapshot(root, token, index["frames"][token], rectified_wh=size)
+        shot = load_snapshot(root, token, index["frames"][token], rectified_wh=size)
         result[phase] = {"sha256": shot.content_sha256,
                          "objects": {name: [asdict(obj) for obj in detector(shot)[0]]
                                      for name, detector in models.items()}}
@@ -62,10 +62,10 @@ def _observe(root, index, anchor, models, size):
 
 
 def load_chain_observations(index, digest, path, seal):
+    capture = sealed_read(path, seal)
     from hybrid_drive.experiments.object_vru_detector import WEIGHTS_SHA256 as SSD
     from hybrid_drive.experiments.vru_coverage_detector import WEIGHTS_SHA256 as FASTER
 
-    capture = sealed_read(path, seal)
     if (capture["schema"] != CAPTURE_SCHEMA or capture["input_sha256"] != digest
             or capture["labels_mounted"] is not False or set(capture["detectors"]) != set(SINGLES)
             or capture["detectors"]["ssdlite"]["weights_sha256"] != SSD
@@ -111,7 +111,7 @@ def recheck(row, i):
 
 
 def index_sha(root):
-    return sha256(read_bounded(root / "index.json", 16 * 1024**2)).hexdigest()
+    return sha256(read_bounded(root / "index.json", INDEX_LIMIT)).hexdigest()
 
 
 def sealed_read(path, seal):
