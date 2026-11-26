@@ -1,8 +1,9 @@
-"""Prepare fixed observation-only windows independent of the #50–53 detector trials."""
+"""Prepare fixed observation-only windows for the VRU fusion and chain trials."""
 
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 import sys
@@ -28,19 +29,32 @@ from hybrid_drive.experiments.visual_vru_data import _read_recordings
 
 
 SOURCE_SHA256 = "33fc31b846496be039c4fd3030e27ee9382589dc81ec12f1402b200148e82b08"
+CHAIN_CONTROL_SOURCE_SHA256 = "20a000f8edf22c5aaf8e5eb4b4e2d04ce6961abfd8bfa9a2f4241c28e3099773"
 INPUT_SCHEMA = "hybrid-drive-vru-fusion-holdout-inputs-v1"
 TARGET_SCHEMA = "hybrid-drive-vru-fusion-holdout-targets-v1"
 _SOURCE_SCHEMA = "hybrid-drive-vru-fusion-holdout-sources-v1"
-_SHARDS = {3, 5, 22}
+_SHARDS = frozenset((3, 5, 22))
 _RECORDINGS = frozenset((
     "2021.05.12.23.36.44_veh-35", "2021.06.09.14.58.55_veh-35", "2021.06.14.16.32.09_veh-35",
     "2021.06.14.19.22.11_veh-38", "2021.07.16.20.45.29_veh-35", "2021.10.11.07.12.18_veh-50",
+))
+_CONTROL_SHARDS = frozenset((11, 16))
+_CONTROL_RECORDINGS = frozenset((
+    "2021.06.09.14.03.17_veh-12", "2021.07.24.23.50.16_veh-17",
+    "2021.06.14.18.42.45_veh-12", "2021.10.06.17.43.07_veh-28",
 ))
 _CAPS = {"moving": 8, "quiet": 4, "empty": 2}
 _RECORDING_CAP = sum(_CAPS.values())
 _MIN_GAP_US = 3_000_000
 _STEP_US = (400_000, 600_000)
 _IMAGE_LIMIT = 2 * 1024**2
+
+
+@dataclass(frozen=True)
+class _SourceProfile:
+    shards: frozenset[int]
+    recordings: frozenset[str]
+    previous_recordings: frozenset[str]
 
 
 def prepare_fusion_holdout(metadata_archive: Path, camera_root: Path, source_path: Path, output: Path) -> dict:
@@ -94,22 +108,35 @@ def load_fusion_labels(input_root: Path, labels_path: Path) -> dict:
 
 def _load_source(source_path):
     source = decode_json(read_bounded(Path(source_path), 16 * 1024))
-    if (not isinstance(source, dict) or source.get("schema") != _SOURCE_SCHEMA
-            or sha256(canonical_json(source)).hexdigest() != SOURCE_SHA256):
+    if not isinstance(source, dict) or source.get("schema") != _SOURCE_SCHEMA:
         raise PreparationError("Fusion holdout sources must match the checked-in digest")
-    expected_previous = set().union(*TEMPORAL_RECORDINGS.values())
-    if set(source["previous_recordings"]) != expected_previous:
-        raise PreparationError("Fusion holdout must exclude all prior Temporal VRU recordings")
+    try:
+        profile = _source_profile(sha256(canonical_json(source)).hexdigest())
+    except ValueError as exc:
+        raise PreparationError("Fusion holdout sources must match the checked-in digest") from exc
+    if set(source["previous_recordings"]) != profile.previous_recordings:
+        raise PreparationError("Fusion holdout must exclude every prior VRU recording in its profile")
     _check_recording_groups(source)
     logs = source["logs"]
-    if (source["camera_archives"].keys() != {str(shard) for shard in _SHARDS}
-            or Counter(row["camera_shard"] for row in logs) != {shard: 2 for shard in _SHARDS}
-            or {row["recording"] for row in logs} != _RECORDINGS):
+    if (source["camera_archives"].keys() != {str(shard) for shard in profile.shards}
+            or Counter(row["camera_shard"] for row in logs) != {shard: 2 for shard in profile.shards}
+            or {row["recording"] for row in logs} != profile.recordings):
         raise PreparationError("Unexpected pinned Fusion VRU recordings or camera shards")
     return source
 
 
+def _source_profile(digest):
+    prior = frozenset().union(*TEMPORAL_RECORDINGS.values())
+    if digest == SOURCE_SHA256:
+        return _SourceProfile(_SHARDS, _RECORDINGS, prior)
+    if digest == CHAIN_CONTROL_SOURCE_SHA256:
+        return _SourceProfile(_CONTROL_SHARDS, _CONTROL_RECORDINGS, prior | _RECORDINGS)
+    raise ValueError("Expected a pinned Fusion VRU source digest")
+
+
 def _collect_observations(metadata_archive, source, wanted):
+    digest = sha256(canonical_json(source)).hexdigest()
+    profile = _source_profile(digest)
     observed, recordings, samples, future_tokens = {}, {}, [], set()
     for spec, frames in _read_recordings(metadata_archive, source):
         recording, shard = spec["recording"], str(spec["camera_shard"])
@@ -136,11 +163,11 @@ def _collect_observations(metadata_archive, source, wanted):
                       "older_token": None if older is None else older["token"], "recording": recording}
             samples.append((anchor, {"sample_token": current["token"], "tracks": tracks, "target_dt_s": dt}))
         recordings[recording] = {**summary, "older_statuses": dict(older_status)}
-    if recordings.keys() != _RECORDINGS or observed.keys() & future_tokens:
+    if recordings.keys() != profile.recordings or observed.keys() & future_tokens:
         raise PreparationError("Fusion VRU is missing a pinned recording or contains a future observation")
     samples.sort(key=lambda pair: (pair[0]["recording"], observed[pair[0]["sample_token"]]["ref_time_us"]))
     anchors, rows = zip(*samples, strict=True)
-    index = {"schema": INPUT_SCHEMA, "source_sha256": SOURCE_SHA256, "anchors": list(anchors), "frames": observed}
+    index = {"schema": INPUT_SCHEMA, "source_sha256": digest, "anchors": list(anchors), "frames": observed}
     return index, list(rows), recordings
 
 
@@ -191,9 +218,10 @@ def _read_index(root):
 
 def _validate_index(index):
     require_keys(index, {"schema", "source_sha256", "anchors", "frames"}, "Fusion VRU input")
+    profile = _source_profile(index["source_sha256"])
     anchors, frames = index["anchors"], index["frames"]
-    if (index["schema"] != INPUT_SCHEMA or index["source_sha256"] != SOURCE_SHA256
-            or not isinstance(anchors, list) or not 1 <= len(anchors) <= len(_RECORDINGS) * _RECORDING_CAP
+    if (index["schema"] != INPUT_SCHEMA
+            or not isinstance(anchors, list) or not 1 <= len(anchors) <= len(profile.recordings) * _RECORDING_CAP
             or not isinstance(frames, dict) or not 2 * len(anchors) <= len(frames) <= 3 * len(anchors)):
         raise ValueError("Unexpected Fusion VRU observation index shape or source")
     used, images, counts = set(), {}, Counter()
@@ -201,7 +229,7 @@ def _validate_index(index):
     for anchor in anchors:
         require_keys(anchor, {"sample_token", "previous_token", "older_token", "recording"}, "Fusion VRU anchor")
         older, previous, now, recording = (anchor[k] for k in ("older_token", "previous_token", "sample_token", "recording"))
-        if not isinstance(recording, str) or recording not in _RECORDINGS:
+        if not isinstance(recording, str) or recording not in profile.recordings:
             raise ValueError("Unexpected Fusion VRU recording")
         stamps = []
         for token in (previous, now) if older is None else (older, previous, now):
@@ -218,7 +246,7 @@ def _validate_index(index):
         prior = recording, stamp
     if used != frames.keys() or len(images) != len(frames) * len(CAMERAS):
         raise ValueError("Fusion VRU contains unreferenced observations or duplicate JPEG bytes")
-    if counts.keys() != _RECORDINGS or any(count > _RECORDING_CAP for count in counts.values()):
+    if counts.keys() != profile.recordings or any(count > _RECORDING_CAP for count in counts.values()):
         raise ValueError("Unexpected Fusion VRU counts by recording")
 
 
