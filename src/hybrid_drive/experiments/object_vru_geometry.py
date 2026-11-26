@@ -82,6 +82,14 @@ def project_detection(calibration: CameraCalibration, rgb: NDArray[np.uint8], bo
     descriptor is three 12-bin inner-crop RGB histograms normalized jointly;
     compare descriptors only within the same camera.
     """
+    hit, _ = trace_projection(calibration, rgb, box_xyxy, kind, confidence, detection_id=detection_id)
+    return hit
+
+
+def trace_projection(calibration: CameraCalibration, rgb: NDArray[np.uint8], box_xyxy: ArrayLike,
+                     kind: Kind, confidence: float, *,
+                     detection_id: str) -> tuple[GroundHit | None, str | None]:
+    """Return the same projection with its first geometric rejection, if any."""
     if not isinstance(calibration, CameraCalibration):
         raise ValueError("Expected a rectified camera calibration")
     identifier(detection_id, "detection ID")
@@ -93,25 +101,28 @@ def project_detection(calibration: CameraCalibration, rgb: NDArray[np.uint8], bo
     left, top, right, bottom = matrix(box_xyxy, (4,), "box XYXY").tolist()
     if right < left or bottom < top:
         raise ValueError("Box corners must be in XYXY order")
-    if (right - left < 4 or bottom - top < 8 or left < _EDGE_MARGIN_PX or top < _EDGE_MARGIN_PX
-            or right > calibration.width - 1 - _EDGE_MARGIN_PX
+    if right - left < 4 or bottom - top < 8:
+        return None, "size"
+    if (left < _EDGE_MARGIN_PX or top < _EDGE_MARGIN_PX or right > calibration.width - 1 - _EDGE_MARGIN_PX
             or bottom > calibration.height - 1 - _EDGE_MARGIN_PX):
-        return None
+        return None, "edge"
     camera_to_ego = invert_pose(calibration.ego_to_camera)
     u = (left + right) / 2
     intrinsic = calibration.intrinsic
     point = _ground_point(u, bottom, intrinsic, camera_to_ego, calibration.near_m)
-    if point is None or not (0 <= point[0] <= 32 and abs(point[1]) <= 12):
-        return None
+    if point is None:
+        return None, "invalid_ray"
+    if not (0 <= point[0] <= 32 and abs(point[1]) <= 12):
+        return None, "outside_roi"
     perturbed = [_ground_point(u, bottom + d, intrinsic, camera_to_ego, calibration.near_m)
                  for d in (-_FOOT_PERTURBATION_PX, _FOOT_PERTURBATION_PX)]
     if any(p is None for p in perturbed):
-        return None
+        return None, "unstable"
     sensitivity = max(dist(point, p) for p in perturbed)
     if sensitivity > _MAX_FOOT_SENSITIVITY_M:
-        return None
+        return None, "unstable"
     return GroundHit(detection_id, kind, calibration.name, point, tuple(camera_to_ego[:3, 3]),
-                     confidence, max(.15, sensitivity), _appearance(rgb, left, top, right, bottom))
+                     confidence, max(.15, sensitivity), _appearance(rgb, left, top, right, bottom)), None
 
 
 def _ground_point(u, v, intrinsic, camera_to_ego, near) -> XY | None:
